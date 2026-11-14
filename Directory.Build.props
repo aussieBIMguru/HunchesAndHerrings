@@ -1,0 +1,14 @@
+<Project>
+  <!--
+    Shared build settings for every project in the Hunches & Herrings solution.
+    One place for the version: the assemblies, build\publish.ps1, the installer and the setup file name all read it.
+  -->
+  <PropertyGroup>
+    <Version>0.2.0</Version>
+    <Product>Hunches &amp; Herrings</Product>
+    <Authors>Gavin Nicholls</Authors>
+    <Company>Gavin Nicholls</Company>
+    <Copyright>Copyright (c) 2026 Gavin Nicholls</Copyright>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+</Project>

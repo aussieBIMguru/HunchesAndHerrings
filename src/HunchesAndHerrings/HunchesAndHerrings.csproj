@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HunchesAndHerrings</RootNamespace>
+    <AssemblyName>HunchesAndHerrings</AssemblyName>
+    <AssemblyTitle>Hunches &amp; Herrings</AssemblyTitle>
+    <ApplicationIcon>Assets\HunchesAndHerrings.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- Shipped next to the exe (build\publish.ps1 checks they made it into the publish) -->
+  <ItemGroup>
+    <None Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\HunchesAndHerrings.ico" />
+    <Resource Include="Assets\HunchesAndHerrings.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HunchesAndHerrings.Core\HunchesAndHerrings.Core.csproj" />
+  </ItemGroup>
+
+</Project>

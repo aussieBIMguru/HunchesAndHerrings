@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/HunchesAndHerrings/HunchesAndHerrings.csproj" />
+  <Project Path="src/HunchesAndHerrings.Core/HunchesAndHerrings.Core.csproj" />
+</Solution>

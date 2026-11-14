@@ -1,0 +1,161 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ================= Palette: sepia ink on aged paper ================= -->
+    <Color x:Key="PaperColor">#F3EAD3</Color>
+    <Color x:Key="PaperDarkColor">#E2D3AE</Color>
+    <Color x:Key="InkColor">#2B2118</Color>
+    <Color x:Key="InkFadedColor">#7A6650</Color>
+    <Color x:Key="RedInkColor">#8B1E1E</Color>
+    <Color x:Key="BlueInkColor">#23395B</Color>
+
+    <SolidColorBrush x:Key="PaperBrush" Color="{StaticResource PaperColor}" />
+    <SolidColorBrush x:Key="PaperDarkBrush" Color="{StaticResource PaperDarkColor}" />
+    <SolidColorBrush x:Key="PaperTintBrush" Color="#40FFFFFF" />
+    <SolidColorBrush x:Key="PaperHoverBrush" Color="#33A0825A" />
+    <SolidColorBrush x:Key="InkBrush" Color="{StaticResource InkColor}" />
+    <SolidColorBrush x:Key="InkFadedBrush" Color="{StaticResource InkFadedColor}" />
+    <SolidColorBrush x:Key="RedInkBrush" Color="{StaticResource RedInkColor}" />
+    <SolidColorBrush x:Key="BlueInkBrush" Color="{StaticResource BlueInkColor}" />
+    <SolidColorBrush x:Key="OverlayBrush" Color="#D02B2118" />
+
+    <!-- ================= Type ================= -->
+    <FontFamily x:Key="HandFont">Ink Free, Segoe Print, Segoe Script</FontFamily>
+    <FontFamily x:Key="BodyFont">Palatino Linotype, Book Antiqua, Georgia</FontFamily>
+    <FontFamily x:Key="TitleFont">Old English Text MT, Palatino Linotype, Georgia</FontFamily>
+
+    <!-- ================= Buttons ================= -->
+    <Style TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource HandFont}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Padding" Value="10,3" />
+        <Setter Property="Margin" Value="3" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{StaticResource PaperTintBrush}"
+                            BorderBrush="{StaticResource InkBrush}"
+                            BorderThickness="1.4"
+                            CornerRadius="2"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PaperHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PaperDarkBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Floor tabs above the map -->
+    <Style x:Key="FloorTab" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource HandFont}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bd" BorderBrush="{StaticResource InkBrush}" BorderThickness="1.4,1.4,1.4,0"
+                            CornerRadius="3,3,0,0" Padding="14,2" Background="Transparent">
+                        <ContentPresenter HorizontalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PaperDarkBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PaperHoverBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ================= Notebook tabs ================= -->
+    <Style TargetType="TabControl">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{StaticResource InkBrush}" />
+        <Setter Property="BorderThickness" Value="1.4" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+
+    <Style TargetType="TabItem">
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource HandFont}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="Bd" BorderBrush="{StaticResource InkBrush}" BorderThickness="1.4,1.4,1.4,0"
+                            CornerRadius="3,3,0,0" Padding="9,2" Margin="0,0,3,0" Background="Transparent">
+                        <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PaperDarkBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PaperHoverBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ================= Inputs ================= -->
+    <Style TargetType="TextBox">
+        <Setter Property="Background" Value="#30FFFFFF" />
+        <Setter Property="Foreground" Value="{StaticResource BlueInkBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource InkFadedBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource HandFont}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+
+    <Style TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource BodyFont}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Margin" Value="0,3" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource HandFont}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="6,0" />
+    </Style>
+
+    <Style TargetType="ComboBox">
+        <Setter Property="FontFamily" Value="{StaticResource BodyFont}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Margin" Value="3" />
+        <Setter Property="MinWidth" Value="150" />
+    </Style>
+
+    <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="{StaticResource PaperBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource InkBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource BodyFont}" />
+    </Style>
+
+</ResourceDictionary>
