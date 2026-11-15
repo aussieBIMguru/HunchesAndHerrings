@@ -13,6 +13,7 @@ public sealed partial class GameSession
     private static readonly string[] AdviceWords = { "help", "stuck", "next", "advice", "suggest", "what now", "hint", "where do i", "what should" };
     private static readonly string[] RecapWords = { "recap", "summary", "summarise", "progress", "how are we", "how am i" };
     private static readonly string[] StatusWords = { "status", "busy", "where are you", "what are you doing", "you doing" };
+    private static readonly string[] SendForWords = { "send for", "fetch", "summon", "call for", "get hold of", "bring" };
     private static readonly string[] GreetingWords = { "hello", "hi", "morning", "afternoon", "evening", "hey" };
 
     /// <summary>Gives the sergeant an instruction or question in plain words.</summary>
@@ -37,7 +38,11 @@ public sealed partial class GameSession
         string? room = MatchRoom(said);
         var rng = RuntimeRng();
 
-        if (Has(said, StatusWords))
+        if (Has(said, SendForWords) && person is not null)
+        {
+            msgs.AddRange(SendFor(person.Id));
+        }
+        else if (Has(said, StatusWords))
         {
             SergeantSay(msgs, Sergeant is null ? "Right here at your side, {SIR}." : $"I'm {SergeantStatus}.");
         }
@@ -89,7 +94,9 @@ public sealed partial class GameSession
         string n = person.ShortName;
         if (w.RoomId == RoomIds.Away)
         {
-            return $"{n} has gone off to the village, I believe. Back later this afternoon.";
+            return person.IsVisitor
+                ? $"{n} isn't at the house just now. We could send for {person.Him}, if you like: say \"send for {n}\"."
+                : $"{n} has gone off to the village, I believe. Back later this afternoon.";
         }
 
         string room = Case.Manor.NameOf(w.RoomId);
@@ -130,10 +137,24 @@ public sealed partial class GameSession
         }
 
         var eliminated = ProgressSolver.Eliminated(Case, DiscoveredClues);
-        var unaccounted = Case.Suspects.Where(s => s.Id != Case.MurdererId && !eliminated.Contains(s.Id)).ToList();
+        var unaccounted = Case.Suspects.Where(s => !Case.IsCulprit(s.Id) && !eliminated.Contains(s.Id)).ToList();
         if (unaccounted.Count == 0)
         {
-            return "By my reckoning there's only one of them left standing, {SIR}. Shall we see about an arrest?";
+            return Case.IsAccident
+                ? "By my reckoning every one of them can be put somewhere else when it happened, {SIR}. Makes you wonder if anyone did it at all."
+                : "By my reckoning there's precious few left in the frame, {SIR}. Shall we see about an arrest?";
+        }
+
+        var callers = Case.Visitors.Where(v => CanSendFor(v.Id)).ToList();
+        if (callers.Count > 0 && RuntimeRng().NextDouble() < 0.25)
+        {
+            return $"{callers[0].ShortName} isn't at the house just now, but we could send for {callers[0].Him}. Just say the word.";
+        }
+
+        var secrets = Case.Suspects.Where(s => CanConfront(s.Id) && !HasAsked(s.Id, Topic.Confront)).ToList();
+        if (secrets.Count > 0)
+        {
+            return $"We've found something {secrets[0].ShortName} would rather we hadn't. Put it to {secrets[0].Him}, {{SIR}}.";
         }
 
         // Point at someone still in the frame without saying whether they're guilty.
@@ -154,13 +175,13 @@ public sealed partial class GameSession
             return $"We've not been through {pick.ShortName}'s things. They'll be in the {Case.Manor.NameOf(pick.PersonalRoomId)}.";
         }
 
-        return $"There's still {unaccounted.Count + 1} of them we can't rule out. Ask folk about each other: servants notice everything.";
+        return $"There's still {unaccounted.Count + Case.CulpritIds.Count} of them we can't rule out. Ask folk about each other: servants notice everything.";
     }
 
     private string Recap()
     {
         int clues = _discoveredOrder.Count;
-        int innocents = Case.Suspects.Count - 1;
+        int innocents = Case.Suspects.Count - Case.CulpritIds.Count;
         int cleared = ProgressSolver.Eliminated(Case, DiscoveredClues).Count;
         string time = MinutesLeft >= 60 ? $"{MinutesLeft / 60} hours and {MinutesLeft % 60} minutes" : $"{MinutesLeft} minutes";
         return $"We've {clues} things in the journal and {_contradictions.Count} clashes. By my reckoning you could rule out {cleared} of the {innocents} innocent folk already. That leaves {time} before the Chief Constable arrives.";
@@ -186,7 +207,7 @@ public sealed partial class GameSession
     {
         Character? best = null;
         int bestLength = 0;
-        foreach (Character s in Case.Suspects)
+        foreach (Character s in Household)
         {
             foreach (string alias in PersonAliases(s))
             {
@@ -219,6 +240,9 @@ public sealed partial class GameSession
             case RoleKind.Doctor: yield return "doctor"; yield return "dr"; break;
             case RoleKind.Spouse: yield return s.IsMale ? "husband" : "wife"; break;
             case RoleKind.BusinessPartner: yield return "partner"; break;
+            case RoleKind.Constable: yield return "constable"; yield return "policeman"; break;
+            case RoleKind.RivalDetective: yield return "rival"; yield return "detective"; break;
+            case RoleKind.YoungChild: yield return "child"; yield return "boy"; yield return "girl"; break;
         }
     }
 

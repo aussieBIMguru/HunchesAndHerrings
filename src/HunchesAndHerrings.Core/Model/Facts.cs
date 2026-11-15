@@ -16,6 +16,8 @@ namespace HunchesAndHerrings.Core.Model;
 [JsonDerivedType(typeof(GenderSightingFact), "gender")]
 [JsonDerivedType(typeof(ScheduleFact), "schedule")]
 [JsonDerivedType(typeof(WeaponFact), "weapon")]
+[JsonDerivedType(typeof(PresenceFact), "presence")]
+[JsonDerivedType(typeof(ExplainedFact), "explained")]
 public abstract record Fact;
 
 /// <summary>Someone was in a room at a given time last night.</summary>
@@ -44,3 +46,9 @@ public sealed record ScheduleFact(string CharacterId, int FromHour, int ToHour, 
 
 /// <summary>The weapon used.</summary>
 public sealed record WeaponFact(string WeaponId) : Fact;
+
+/// <summary>Whether someone was in the house at all at a given time last night (a visitors' book, a gate log).</summary>
+public sealed record PresenceFact(string CharacterId, int Slot, bool InHouse) : Fact;
+
+/// <summary>A piece of scene evidence turns out to have an innocent explanation and says nothing about the killer.</summary>
+public sealed record ExplainedFact(TraitCategory Category, string Explanation) : Fact;

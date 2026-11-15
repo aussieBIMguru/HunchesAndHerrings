@@ -63,6 +63,27 @@ public partial class MainWindow
             PeoplePanel.Children.Add(PersonChip(person));
         }
 
+        var callers = _game.Case.Visitors.Where(v => _game.CanSendFor(v.Id)).ToList();
+        if (callers.Count > 0 && canAct)
+        {
+            var row = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+            row.Children.Add(Ui.Text("Not at the house: ", 12, Ui.InkFaded, italic: true));
+            foreach (Character v in callers)
+            {
+                string id = v.Id;
+                Button send = Ui.Button($"Send for {v.ShortName}", () =>
+                {
+                    React(_game?.SendFor(id) ?? Array.Empty<GameMessage>());
+                    RefreshAll();
+                    AfterAction();
+                }, $"A messenger fetches {v.ShortName}, {v.RoleLabel}. {v.HeCap}'ll wait in the drawing room for a couple of hours.");
+                send.FontSize = 12.5;
+                row.Children.Add(send);
+            }
+
+            PeoplePanel.Children.Add(row);
+        }
+
         if (_selectedPersonId is not null && _game.Case.Person(_selectedPersonId) is { } selected)
         {
             BuildInterview(selected);
@@ -147,7 +168,12 @@ public partial class MainWindow
         var who = new StackPanel();
         who.Children.Add(Ui.Handwriting(person.FullName, 19, weight: FontWeights.Bold));
         who.Children.Add(Ui.Text(TextBank.Capitalise(person.RoleLabel), 13, Ui.InkFaded, italic: true));
-        who.Children.Add(Ui.Text(_game.Detective.Apply(TextBank.Greeting(person, new Random(person.PortraitSeed + _game.HourIndex))), 13));
+        string greeting = person.IsRival
+            ? $"{person.ShortName} looks up. {_game.RivalGreeting(_game.HourIndex)}"
+            : person.IsYoungChild
+                ? $"{person.ShortName} peers at you from behind the furniture."
+                : _game.Detective.Apply(TextBank.Greeting(person, new Random(person.PortraitSeed + _game.HourIndex)));
+        who.Children.Add(Ui.Text(greeting, 13));
         bool watched = _game.Focused.Contains(person.Id);
         who.Children.Add(Ui.Button(watched ? "◯ Stop watching" : "◯ Keep an eye on them", () => ToggleFocus(person.Id),
             $"Watched suspects (up to {GameSession.MaxFocus}) are circled on the plan, so you always know roughly where they are."));
@@ -162,11 +188,36 @@ public partial class MainWindow
                 asked ? "Asked already: hear the answer again (no time)" : "Ten minutes", enabled: canAct || asked));
         }
 
+        if (person.IsRival)
+        {
+            topics.Children.Add(Ui.Button($"Compare notes ({GameSession.CompareNotesMinutes} min)", () => AskTopic(person.Id, Topic.CompareNotes, null),
+                "They may share a tip, or hand back something they've pocketed. Not everything they tell you is true.", canAct));
+            topics.Children.Add(Ui.Button("Any theories? (10 min)", () => AskTopic(person.Id, Topic.RivalTheory, null), "Their guess. Take it or leave it.", canAct));
+            InterviewPanel.Children.Add(topics);
+            AddSpeech();
+            return;
+        }
+
+        if (person.IsYoungChild)
+        {
+            AddTopic("What did you see last night?", Topic.Sightings);
+            AddTopic("Tell me about yourself", Topic.Self);
+            InterviewPanel.Children.Add(topics);
+            InterviewPanel.Children.Add(Ui.Text("Children don't tell the whole story, but what they do say is true.", 11, Ui.InkFaded, italic: true));
+            AddSpeech();
+            return;
+        }
+
         AddTopic("Where were you last night?", Topic.LastNight);
         AddTopic("What did you see?", Topic.Sightings);
         AddTopic("Tell me about yourself", Topic.Self);
         AddTopic($"About {_game.Case.Victim.ShortName}", Topic.Victim);
         AddTopic("Where is everyone today?", Topic.Whereabouts);
+        if (_game.CanConfront(person.Id))
+        {
+            AddTopic("Confront them with their secret", Topic.Confront);
+        }
+
         InterviewPanel.Children.Add(topics);
 
         // Ask about another member of the household.
@@ -193,6 +244,11 @@ public partial class MainWindow
             $"{_game.Case.SergeantName} questions them while you get on (50 min). Results may be partial.",
             canAct && _game.Sergeant is null));
 
+        AddSpeech();
+    }
+
+    private void AddSpeech()
+    {
         if (!string.IsNullOrEmpty(_lastSpeech))
         {
             var speech = new TextBlock

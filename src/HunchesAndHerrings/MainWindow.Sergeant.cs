@@ -123,7 +123,7 @@ public partial class MainWindow
         ChatChips.Children.Add(Chip("Thoughts?", () => SendChat("Any thoughts on who did it?"), true));
         ChatChips.Children.Add(Chip("Recap", () => SendChat("Give me a recap"), true));
 
-        var people = _game.Case.Suspects.ToList();
+        var people = _game.Household.ToList();
         var who = new ComboBox
         {
             ItemsSource = people.Select(p => p.ShortName).ToList(),
@@ -136,6 +136,7 @@ public partial class MainWindow
         ChatChips.Children.Add(who);
         ChatChips.Children.Add(Chip("Question", () => SendChat($"Question {people[Math.Max(0, who.SelectedIndex)].ShortName}"), free));
         ChatChips.Children.Add(Chip("Where?", () => SendChat($"Where is {people[Math.Max(0, who.SelectedIndex)].ShortName}?"), true));
+        ChatChips.Children.Add(Chip("Send for", () => SendChat($"Send for {people[Math.Max(0, who.SelectedIndex)].ShortName}"), _game.CanAct));
 
         var rooms = _game.Case.Manor.Rooms.Where(r => !r.IsPassage).OrderBy(r => r.Floor).ThenBy(r => r.Name).ToList();
         var where = new ComboBox

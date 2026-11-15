@@ -26,6 +26,12 @@ public sealed record CaseOptions(Difficulty Difficulty)
     /// <summary>When true, the sergeant never mishears.</summary>
     public bool ReliableSergeant { get; init; }
 
+    /// <summary>A rival detective is on the case too: a nuisance who sometimes lets slip a clue.</summary>
+    public bool Rival { get; init; }
+
+    /// <summary>The kind of case to build, or null for a surprise.</summary>
+    public CaseModel? Model { get; init; }
+
     /// <summary>Applies the tweaks to the difficulty preset.</summary>
     public DifficultySettings Resolve()
     {
@@ -42,5 +48,5 @@ public sealed record CaseOptions(Difficulty Difficulty)
     }
 
     /// <summary>True when anything differs from the plain preset.</summary>
-    public bool IsCustom => SuspectCount is not null || EndHour is not null || MaxRescues is not null || RedHerrings is not null || ReliableSergeant;
+    public bool IsCustom => SuspectCount is not null || EndHour is not null || MaxRescues is not null || RedHerrings is not null || ReliableSergeant || Model is not null;
 }

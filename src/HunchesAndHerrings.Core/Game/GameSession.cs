@@ -20,6 +20,7 @@ public sealed partial class GameSession
     private readonly List<JournalItem> _journal = new();
     private readonly List<ChatLine> _chat = new();
     private readonly List<TrailStep> _trail = new();
+    private readonly List<Summons> _summons = new();
     private List<Contradiction> _contradictions = new();
 
     public GameSession(CaseFile caseFile, Detective? detective = null)
@@ -116,11 +117,22 @@ public sealed partial class GameSession
 
     public string LocationOf(string characterId) => LocationAt(characterId, HourIndex);
 
-    public string LocationAt(string characterId, int hourIndex) =>
-        Case.Day.TryGetValue(characterId, out string[]? hours) ? hours[Math.Clamp(hourIndex, 0, hours.Length - 1)] : RoomIds.Away;
+    public string LocationAt(string characterId, int hourIndex)
+    {
+        if (_summons.LastOrDefault(s => s.PersonId == characterId && hourIndex >= s.FromHour && hourIndex < s.ToHour) is { } called)
+        {
+            return called.RoomId;
+        }
+
+        return Case.Day.TryGetValue(characterId, out string[]? hours) ? hours[Math.Clamp(hourIndex, 0, hours.Length - 1)] : RoomIds.Away;
+    }
+
+    /// <summary>Everyone who can be met in the house: the suspects, the children and any rival detective.</summary>
+    public IEnumerable<Character> Household =>
+        Case.Suspects.Concat(Case.Children).Concat(Case.Rival is { } r ? new[] { r.Detective } : Array.Empty<Character>());
 
     public IReadOnlyList<Character> PeopleIn(string roomId) =>
-        Case.Suspects.Where(c => LocationOf(c.Id) == roomId).ToList();
+        Household.Where(c => LocationOf(c.Id) == roomId).ToList();
 
     public IReadOnlyList<Character> PeopleHere => PeopleIn(RoomId);
 
@@ -146,10 +158,10 @@ public sealed partial class GameSession
         var told = DiscoveredClues.SelectMany(c => c.Facts.OfType<ScheduleFact>()).ToList();
         var result = new List<Whereabout>();
 
-        foreach (Character s in Case.Suspects)
+        foreach (Character s in Household)
         {
             string truth = LocationAt(s.Id, hourIndex);
-            bool precise = Settings.Difficulty == Difficulty.Novice || Focused.Contains(s.Id);
+            bool precise = Settings.Difficulty == Difficulty.Novice || Focused.Contains(s.Id) || s.IsRival || s.IsYoungChild;
 
             if (hourIndex == HourIndex && truth == RoomId)
             {
@@ -252,9 +264,14 @@ public sealed partial class GameSession
             return msgs;
         }
 
-        var found = Case.Clues.Where(c => c.RoomId == RoomId && !_discovered.Contains(c.Id)).ToList();
+        var here = Case.Clues.Where(c => c.RoomId == RoomId && !_discovered.Contains(c.Id)).ToList();
+        var found = here.Where(c => !RivalHolds(c.Id)).ToList();
         SearchedRooms.Add(RoomId);
         Emit(msgs, MessageKind.Info, $"You search the {CurrentRoom.Name} from top to bottom.");
+        if (found.Count < here.Count && Case.Rival is { } rival)
+        {
+            Emit(msgs, MessageKind.Warning, StoryBank.RivalPocketed(rival.Detective));
+        }
         if (found.Count == 0)
         {
             Emit(msgs, MessageKind.Info, "You find nothing new.");
@@ -279,6 +296,23 @@ public sealed partial class GameSession
             return new InterviewResult(string.Empty, Warn(msgs, "There's nobody by that name."), false);
         }
 
+        if (topic is Topic.CompareNotes or Topic.RivalTheory)
+        {
+            if (!person.IsRival)
+            {
+                return new InterviewResult(string.Empty, Warn(msgs, "That's a question for the rival detective."), false);
+            }
+
+            if (!Guard(msgs))
+            {
+                return new InterviewResult(string.Empty, msgs, false);
+            }
+
+            return LocationOf(personId) != RoomId
+                ? new InterviewResult(string.Empty, Warn(msgs, $"{person.ShortName} isn't here."), false)
+                : AskRival(topic, msgs);
+        }
+
         string key = AskKey(personId, topic, targetId);
         bool already = AskedKeys.Contains(key);
         string speech = ComposeSpeech(person, topic, targetId, key);
@@ -295,6 +329,16 @@ public sealed partial class GameSession
         if (LocationOf(personId) != RoomId)
         {
             return new InterviewResult(string.Empty, Warn(msgs, $"{person.ShortName} isn't here."), false);
+        }
+
+        if (ClosetedWithRival(personId) is { } closeted)
+        {
+            return new InterviewResult(string.Empty, Warn(msgs, closeted), false);
+        }
+
+        if (topic == Topic.Confront && !CanConfront(personId))
+        {
+            return new InterviewResult(string.Empty, Warn(msgs, $"You've nothing to confront {person.ShortName} with yet. Find something of {person.His} that {person.He}'d rather you hadn't."), false);
         }
 
         AskedKeys.Add(key);
@@ -415,30 +459,45 @@ public sealed partial class GameSession
         return msgs;
     }
 
-    /// <summary>Names the murderer and ends the case.</summary>
-    public Verdict Accuse(string personId, MotiveKind motive, string? evidenceId)
+    /// <summary>Names a single murderer and ends the case.</summary>
+    public Verdict Accuse(string personId, MotiveKind motive, string? evidenceId) =>
+        Accuse(new[] { personId }, motive, evidenceId);
+
+    /// <summary>
+    /// Names the guilty (one or several) and ends the case. An empty list declares that there was no murder at all.
+    /// </summary>
+    public Verdict Accuse(IReadOnlyCollection<string> personIds, MotiveKind motive, string? evidenceId)
     {
         if (Verdict is not null)
         {
             return Verdict;
         }
 
-        Character murderer = Case.Murderer;
-        bool correct = personId == murderer.Id;
-        bool motiveOk = correct && motive == murderer.Motive;
-        bool evidenceOk = correct && evidenceId is not null && Case.KeyEvidenceIds.Contains(evidenceId);
+        var named = personIds.Distinct().ToList();
+        var guilty = Case.CulpritIds.ToHashSet();
+        bool anyInnocent = named.Any(id => !guilty.Contains(id));
+        bool correct = Case.IsAccident ? named.Count == 0 : named.Count > 0 && !anyInnocent && named.Count == guilty.Count;
+        bool partial = !correct && !Case.IsAccident && named.Count > 0 && !anyInnocent;
+        bool motiveOk = (correct || partial) && motive == Case.CaseMotive;
+        bool evidenceOk = (correct || partial) && evidenceId is not null && Case.KeyEvidenceIds.Contains(evidenceId);
         int score = (motiveOk ? 1 : 0) + (evidenceOk ? 1 : 0);
 
-        (string grade, string headline) = (correct, score) switch
+        (string grade, string headline) = (correct, partial, score) switch
         {
-            (false, _) => ("F", "The wrong person stands in the dock."),
-            (true, 2) => ("A", "Case closed. The jury never left the box."),
-            (true, 1) => ("B", "A conviction, though defence counsel made heavy weather of it."),
-            _ => ("C", "Guilty, by the narrowest of margins. You were lucky."),
+            (true, _, 2) when Case.IsAccident => ("A", "No murder at all, and you proved it. The coroner thanks you."),
+            (true, _, _) when Case.IsAccident => ("B", "A death by misadventure, as you said. The inquest agrees, if not for all your reasons."),
+            (true, _, 2) => ("A", "Case closed. The jury never left the box."),
+            (true, _, 1) => ("B", "A conviction, though defence counsel made heavy weather of it."),
+            (true, _, _) => ("C", "Guilty, by the narrowest of margins. You were lucky."),
+            (false, true, _) => ("C", "You caught one of them, but another walks free."),
+            _ when named.Count == 0 => ("F", "You called it an accident. It was murder, and the killer thanks you."),
+            _ when Case.IsAccident => ("F", "There was no murder, and you have put an innocent in the dock."),
+            _ => ("F", "The wrong person stands in the dock."),
         };
 
-        Verdict = new Verdict(correct, motiveOk, evidenceOk, grade, headline, personId, motive, evidenceId);
-        Record(correct ? MessageKind.Info : MessageKind.Warning, $"You accuse {Case.NameOf(personId)}. {headline}");
+        Verdict = new Verdict(correct, motiveOk, evidenceOk, grade, headline, named, motive, evidenceId, partial);
+        string who = named.Count == 0 ? "nobody: it was no murder" : TextBank.JoinNames(named.Select(Case.NameOf).ToList());
+        Record(correct ? MessageKind.Info : MessageKind.Warning, $"You accuse {who}. {headline}");
         return Verdict;
     }
 
@@ -513,6 +572,7 @@ public sealed partial class GameSession
         if (Minute / 60 != before / 60)
         {
             Emit(msgs, MessageKind.Time, $"Somewhere in the house a clock strikes {Clock.HourWords(Minute / 60)}.");
+            RivalRumour(msgs);
         }
 
         ResolveSergeant(msgs);
@@ -574,8 +634,10 @@ public sealed partial class GameSession
         var lines = StatementClues(person.Id, topic, targetId).Select(c => c.Spoken).Where(s => !string.IsNullOrEmpty(s)).ToList();
         string body = lines.Count > 0
             ? string.Join(" ", lines)
-            : TextBank.Fallback(topic, person, targetId is null ? null : Case.Person(targetId), rng);
-        string opener = TextBank.Opener(person, rng);
+            : person.IsYoungChild
+                ? rng.Pick(new[] { "I don't know. Can I go now?", "Nanny says I mustn't tell tales.", "Do you want to see my conker?" })
+                : TextBank.Fallback(topic, person, targetId is null ? null : Case.Person(targetId), rng);
+        string opener = person.IsYoungChild ? string.Empty : TextBank.Opener(person, rng);
         return Detective.Apply(string.IsNullOrEmpty(opener) ? $"\"{body}\"" : $"\"{opener} {body}\"");
     }
 
@@ -605,6 +667,12 @@ public sealed partial class GameSession
         else
         {
             Character? person = Case.Person(task.TargetId);
+            if (person is { IsRival: true })
+            {
+                SergeantSay(msgs, $"{person.ShortName} wouldn't give me the time of day, {{SIR}}. Called me a plodder.");
+                return;
+            }
+
             if (person is null || LocationOf(task.TargetId) == RoomIds.Away)
             {
                 SergeantSay(msgs, $"Couldn't find {Case.NameOf(task.TargetId)} anywhere. Gone to the village, they say.");
@@ -737,6 +805,11 @@ public sealed partial class GameSession
             return $"A hunch: the {Case.Manor.NameOf(clue.RoomId)} hasn't given up all its secrets.";
         }
 
+        if (clue.Topic == Topic.Confront && clue.SpeakerId is not null && !CanConfront(clue.SpeakerId))
+        {
+            return $"A hunch: {Case.NameOf(clue.SpeakerId)} is hiding something. Search {Case.Person(clue.SpeakerId)?.His ?? "their"} things.";
+        }
+
         string who = clue.SpeakerId is not null ? Case.NameOf(clue.SpeakerId) : "someone";
         string about = clue.Topic switch
         {
@@ -746,6 +819,8 @@ public sealed partial class GameSession
             Topic.Victim => Case.Victim.ShortName,
             Topic.AboutPerson when clue.TargetId is not null => Case.NameOf(clue.TargetId),
             Topic.Whereabouts => "everyone's movements today",
+            Topic.Confront => "the secret they're keeping",
+            Topic.CompareNotes => "what they've found",
             _ => "something",
         };
 
@@ -782,6 +857,11 @@ public sealed partial class GameSession
         Journal = _journal.ToList(),
         Chat = _chat.ToList(),
         Trail = _trail.ToList(),
+        Summons = _summons.ToList(),
+        RivalTipsGiven = RivalTipsGiven,
+        RivalReturned = RivalReturned.ToList(),
+        RivalPleas = RivalPleas,
+        Highlights = Highlights.ToDictionary(p => p.Key, p => p.Value.ToList()),
     };
 
     /// <summary>Rebuilds a session from saved progress, regenerating the case from its seed and options.</summary>
@@ -831,6 +911,17 @@ public sealed partial class GameSession
         }
 
         session.Log.AddRange(data.Log);
+        session._summons.AddRange(data.Summons);
+        session.RivalTipsGiven = data.RivalTipsGiven;
+        session.RivalReturned.UnionWith(data.RivalReturned);
+        session.RivalPleas = data.RivalPleas;
+        foreach (var (k, v) in data.Highlights)
+        {
+            foreach (WordSpan span in v)
+            {
+                session.AddHighlight(k, span.First, span.Last);
+            }
+        }
         session._chat.AddRange(data.Chat);
         if (data.Trail.Count > 0)
         {

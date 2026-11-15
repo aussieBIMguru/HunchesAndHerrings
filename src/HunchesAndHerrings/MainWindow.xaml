@@ -3,9 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Hunches &amp; Herrings"
         Icon="Assets/HunchesAndHerrings.ico"
-        Width="1560" Height="960" MinWidth="1280" MinHeight="800"
-        WindowStartupLocation="CenterScreen"
+        Width="1560" Height="960" MinWidth="640" MinHeight="400"
+        WindowStartupLocation="Manual"
         Foreground="{StaticResource InkBrush}">
+    <!-- ScaleFrame is always the client-area size; Root is scaled down inside it when the screen is
+         smaller than the layout's design size (see MainWindow.FitContent). -->
+    <Border x:Name="ScaleFrame">
     <Grid x:Name="Root">
 
         <!-- =================================================== Game view -->
@@ -81,8 +84,9 @@
                         <RowDefinition Height="2*" />
                     </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0">
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,3">
+                    <!-- Hour controls on their own line, so the floor tabs below always have the full width. -->
+                    <StackPanel Grid.Row="0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,4">
                             <TextBlock Text="Whereabouts at" FontFamily="{StaticResource HandFont}" FontSize="14"
                                        VerticalAlignment="Center" Margin="0,0,4,0" />
                             <Button x:Name="HourPrev" Content="◀" Padding="6,0" Margin="1" />
@@ -91,12 +95,12 @@
                             <Button x:Name="HourNext" Content="▶" Padding="6,0" Margin="1" />
                             <Button x:Name="HourNow" Content="Now" Padding="6,0" Margin="1" />
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+                        <UniformGrid Rows="1" Columns="3" HorizontalAlignment="Left">
                             <RadioButton x:Name="FloorUpper" Style="{StaticResource FloorTab}" GroupName="Floors" />
                             <RadioButton x:Name="FloorGround" Style="{StaticResource FloorTab}" GroupName="Floors" IsChecked="True" />
                             <RadioButton x:Name="FloorCellar" Style="{StaticResource FloorTab}" GroupName="Floors" />
-                        </StackPanel>
-                    </DockPanel>
+                        </UniformGrid>
+                    </StackPanel>
 
                     <Border x:Name="MapBorder" Grid.Row="1" BorderBrush="{StaticResource InkBrush}" BorderThickness="1.4" Padding="4">
                         <Viewbox Stretch="Uniform">
@@ -179,7 +183,7 @@
 
                     <TabControl Grid.Row="1" x:Name="Notebook">
                         <TabItem Header="Suspects">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                 <StackPanel x:Name="SuspectsPanel" />
                             </ScrollViewer>
                         </TabItem>
@@ -243,4 +247,5 @@
             </Border>
         </Grid>
     </Grid>
+    </Border>
 </Window>

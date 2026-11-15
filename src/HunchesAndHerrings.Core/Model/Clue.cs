@@ -42,5 +42,8 @@ public sealed class Clue
     /// <summary>Characters this clue places away from the scene at the time of death.</summary>
     public List<string> AlibiFor { get; set; } = new();
 
+    /// <summary>When set, this clue exposes that person's secret, and lets you confront them with it.</summary>
+    public string? SecretOf { get; set; }
+
     public bool IsStatement => SpeakerId is not null;
 }

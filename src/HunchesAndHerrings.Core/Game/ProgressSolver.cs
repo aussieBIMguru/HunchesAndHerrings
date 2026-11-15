@@ -12,10 +12,13 @@ public static class ProgressSolver
     public static HashSet<string> Eliminated(CaseFile caseFile, IEnumerable<Clue> discovered)
     {
         var truthful = discovered.Where(c => c.IsTruthful).ToList();
-        var sceneKnown = truthful.SelectMany(c => c.Facts.OfType<SceneFact>()).Select(f => f.Category).ToHashSet();
+        var sceneKnown = truthful.SelectMany(c => c.Facts.OfType<SceneFact>())
+            .Select(f => f.Category)
+            .Where(caseFile.SceneValues.ContainsKey)
+            .ToHashSet();
         var result = new HashSet<string>();
 
-        foreach (Character suspect in caseFile.Suspects.Where(s => s.Id != caseFile.MurdererId))
+        foreach (Character suspect in caseFile.Suspects.Where(s => !caseFile.IsCulprit(s.Id)))
         {
             bool alibi = truthful.Any(c => c.AlibiFor.Contains(suspect.Id));
             bool trait = truthful.SelectMany(c => c.Facts.OfType<TraitFact>())
@@ -34,7 +37,7 @@ public static class ProgressSolver
     /// <summary>Fraction (0..1) of innocents the player could rule out.</summary>
     public static double Progress(CaseFile caseFile, IEnumerable<Clue> discovered)
     {
-        int innocents = caseFile.Suspects.Count - 1;
+        int innocents = caseFile.Suspects.Count - caseFile.CulpritIds.Count;
         return innocents <= 0 ? 1 : Eliminated(caseFile, discovered).Count / (double)innocents;
     }
 }

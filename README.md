@@ -28,16 +28,19 @@ src/
 
 ## How a case is built
 
-`CaseGenerator` builds solvability in from the start. It doesn't generate a case and then check it:
+`CaseGenerator` (split across `CaseGenerator*.cs`) builds solvability in from the start. It doesn't generate a case and then check it:
 
-- **The crime.** It picks a murderer, a room, a time (10 or 11 pm), a weapon, and two **scene traits** (pipe ash, a left-handed blow, a boot-print size, an allergen present, a blow needing great strength). The murderer is made to match both.
+- **The story.** It first picks a `CaseModel`: a lone killer, two conspirators, the children together, a house of secrets, a secret heir, an accident made to look like murder, the doctor's poison or blunder, an affair, the wrong victim, or an impostor. The cast is built to fit (children for a family pact, a doctor for the doctor's cases, and so on).
+- **The lockdown.** Why nobody can leave (flood, snow, police orders, quarantine, the will, the tide, …), and whether callers from outside may come today.
+- **The crime.** A room, a time (10 or 11 pm), a weapon or poison, and two or three **scene indicators** drawn from the 41 facets in `TraitCatalog` (pipe ash, a stammering voice, violet ink, hobnails, a fear of heights, …). Whoever was in the scene (the "hand") is made to match them. On harder ranks an extra mark is planted that someone can explain away.
 - **Innocents, split two ways.**
-  - **Twins** match every scene trait, so they can only be cleared by an **alibi**: a partner who vouches for them, a neighbour who glimpsed them, or the servants' bell register.
-  - **Others** fail at least one trait. That trait is revealed by one or two **truthful sources**: their own word, gossip from someone else, or a document in their room.
-- **The lie.** The murderer claims to have been somewhere else at the time of death. Either a witness was alone in that room ("not a soul came in"), or the room shows physical proof it was never used. Either way, the notebook flags the clash.
-- **Noise.** Depending on difficulty, the murderer also lies about one of their own traits, may try to frame someone, and an innocent with a secret lies about where they were earlier. The sergeant sometimes mishears.
+  - **Twins** match every indicator, so they can only be cleared by an **alibi**: a partner, a neighbour's glimpse, the bell register, a child's sighting, or the visitors' book.
+  - **Others** fail at least one indicator. That trait is revealed by one or two **truthful sources**: their own word, gossip, or a document in their room.
+- **The lie.** The culprits (or, in an accident, the meddler) claim to have been elsewhere. A witness alone in that room, a room provably unused, or the visitors' book exposes it.
+- **Secrets.** Innocents with secrets lie about where they were earlier; the proof is among their things, and confronting them with it brings a confession.
+- **Noise.** The hand lies about one trait, a culprit may frame someone, the sergeant sometimes mishears, and the optional rival detective trades tips that aren't all true.
 
-Every statement and document carries structured **facts** (`LocationFact`, `TraitFact`, `OccupancyFact`, …). These drive the suspect matrix and the automatic contradiction finder.
+Every statement and document carries structured **facts** (`LocationFact`, `TraitFact`, `OccupancyFact`, `PresenceFact`, `ExplainedFact`, …). These drive the suspect list, the dossier and the automatic contradiction finder.
 
 ## Play features
 
@@ -68,7 +71,7 @@ Every statement and document carries structured **facts** (`LocationFact`, `Trai
 Same routine as Pixel8 and Throng. Needs the .NET 10 SDK and [Inno Setup 6](https://jrsoftware.org/isinfo.php) (a
 build tool, not shipped).
 
-1. Set the version in `Directory.Build.props` (`<Version>`, currently **0.2.0**). That's the only place it lives.
+1. Set the version in `Directory.Build.props` (`<Version>`, currently **0.4.0**). That's the only place it lives.
 2. Close Visual Studio and double-click `publish.bat` (or `powershell -ExecutionPolicy Bypass -File build\publish.ps1`).
 
 The script:
@@ -84,7 +87,7 @@ shortcut (a desktop shortcut is optional). It asks you to close the game if it's
 saved cases (`Documents\Hunches & Herrings`) and your detective profile (`%LocalAppData%\HunchesAndHerrings`). Unsigned builds show a SmartScreen warning the first time (More info ▸
 Run anyway).
 
-To release, add an entry to [CHANGELOG.md](CHANGELOG.md), tag the commit (`v0.2.0`), and attach the setup and its
+To release, add an entry to [CHANGELOG.md](CHANGELOG.md), tag the commit (`v0.4.0`), and attach the setup and its
 `.sha256.txt` to a GitHub release. `clean.bat` removes all bin/obj folders. The installer's parchment artwork comes
 from `tools/make_installer_art.py`.
 
@@ -98,5 +101,8 @@ Credits and licences are listed in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICE
 
 - **New prose:** `Generation/TextBank.cs` holds every template.
 - **New roles:** add a `RoleKind` and a `RoleDef` in `RoleCatalog`.
-- **New trait categories:** extend `TraitCategory`, `Traits.ValueOf`, `TraitRules` and the scene and document templates.
+- **New trait categories:** add a `TraitCategory` and a `TraitDef` in `Model/TraitCatalog.cs` (values, prose, scene text, how it's assigned).
+- **New case models:** add a `CaseModel`, then handle it in `PlanCrime` (Night), `PlanSecrets`, `BuildStoryClues` and `BuildTruth` (Story).
+- **New lockdowns, accidents, secrets:** `Generation/StoryBank.cs`.
+- **New portraits:** drop a JPEG in `Assets/Portraits` and list it in `Model/PortraitCatalog.cs` with its sex, age, hair, spectacles and the roles it suits.
 - **New rooms:** `ManorLayout` holds the floor plan in 640 × 400 plan units per floor.

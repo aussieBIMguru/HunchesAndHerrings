@@ -38,6 +38,7 @@ public partial class MainWindow : Window
         _journal.CloseRequested += CloseJournal;
         _journal.CircleToggled += OnJournalCircle;
         _journal.ActionInvoked += OnJournalAction;
+        _journal.HighlightRequested += OnJournalHighlight;
         JournalHost.Children.Add(_journal);
         JournalIconHost.Content = BookIcon();
 
@@ -81,8 +82,42 @@ public partial class MainWindow : Window
 
         WireSergeantChat();
         KeyDown += OnKeyDown;
+        SourceInitialized += OnSourceInitialized;
+        ScaleFrame.SizeChanged += (_, e) => FitContent(e.NewSize);
         Loaded += OnLoaded;
         Closed += (_, _) => _sound.Dispose();
+    }
+
+    // ================================================================== screen fit
+
+    /// <summary>The smallest client area the layout was designed for; below this the whole UI is scaled down.</summary>
+    private const double DesignWidth = 1280;
+    private const double DesignHeight = 800;
+
+    /// <summary>
+    /// Runs once the window handle exists but before it is shown: sizes the restored window to the monitor the
+    /// game was launched on (never larger than its work area), centres it there, then opens maximised.
+    /// </summary>
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        Rect work = ScreenFit.WorkAreaAtCursor(this);
+        Width = Math.Max(MinWidth, Math.Min(1560, work.Width * 0.9));
+        Height = Math.Max(MinHeight, Math.Min(960, work.Height * 0.9));
+        Left = work.Left + (work.Width - Width) / 2;
+        Top = work.Top + (work.Height - Height) / 2;
+        WindowState = WindowState.Maximized;
+    }
+
+    /// <summary>Scales the UI down uniformly when the client area is smaller than the design size, so nothing is cut off.</summary>
+    private void FitContent(Size available)
+    {
+        if (available.Width <= 0 || available.Height <= 0)
+        {
+            return;
+        }
+
+        double scale = Math.Min(1.0, Math.Min(available.Width / DesignWidth, available.Height / DesignHeight));
+        Root.LayoutTransform = scale < 0.999 ? new ScaleTransform(scale, scale) : Transform.Identity;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -333,7 +368,7 @@ public partial class MainWindow : Window
             if (_game.Case.CrimeScene.Floor == floor)
             {
                 text.Inlines.Add(new Run(" ✕") { Foreground = Ui.RedInk, FontWeight = FontWeights.Bold });
-                tips.Add($"✕ the murder: {_game.Case.CrimeScene.Name}");
+                tips.Add($"✕ the body: {_game.Case.CrimeScene.Name}");
             }
 
             int focusHere = watched.Count(w => manor[w.RoomId].Floor == floor && (w.Certainty != Certainty.Rough || w.Precise));

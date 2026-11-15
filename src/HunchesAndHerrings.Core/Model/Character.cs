@@ -18,7 +18,7 @@ public sealed class Character
     public Station Station { get; init; }
 
     /// <summary>Description of their place in the household, e.g. "the butler".</summary>
-    public string RoleLabel { get; init; } = string.Empty;
+    public string RoleLabel { get; set; } = string.Empty;
 
     /// <summary>Bedroom or workroom where their belongings (and documents) are kept.</summary>
     public string PersonalRoomId { get; set; } = string.Empty;
@@ -26,6 +26,18 @@ public sealed class Character
     public Traits Traits { get; } = new();
     public MotiveKind Motive { get; set; }
     public bool IsVictim { get; init; }
+
+    /// <summary>Doesn't live in the house: calls at certain hours, and can be sent for.</summary>
+    public bool IsVisitor { get; init; }
+
+    /// <summary>The rival detective: not a suspect.</summary>
+    public bool IsRival => Role == RoleKind.RivalDetective;
+
+    /// <summary>Painted portrait to show (see <see cref="PortraitCatalog"/>), or null to draw one in ink.</summary>
+    public string? PortraitId { get; set; }
+
+    /// <summary>A young child: can be questioned, never accused.</summary>
+    public bool IsYoungChild => Role == RoleKind.YoungChild;
 
     /// <summary>Seed for the procedural portrait.</summary>
     public int PortraitSeed { get; init; }

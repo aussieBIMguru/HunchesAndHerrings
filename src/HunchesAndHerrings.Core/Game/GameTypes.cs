@@ -79,13 +79,29 @@ public sealed record TrailStep(string RoomId, int Minute, bool IsStop);
 /// <summary>A line in the conversation with the sergeant.</summary>
 public sealed record ChatLine(bool FromPlayer, string Text, int Minute);
 
+/// <summary>A ringed run of words in a journal entry: word indices, inclusive.</summary>
+public sealed record WordSpan(int First, int Last);
+
+/// <summary>A caller sent for from outside: in the house between two hour indices, waiting in a room.</summary>
+public sealed record Summons(string PersonId, int FromHour, int ToHour, string RoomId);
+
 /// <summary>The outcome of an accusation.</summary>
+/// <param name="CorrectMurderer">Named exactly the guilty (or rightly said there was no murder).</param>
+/// <param name="Partial">Named some of the guilty and nobody innocent, but not all of them.</param>
+/// <param name="AccusedIds">Everyone named; empty when the player declared it no murder.</param>
 public sealed record Verdict(
     bool CorrectMurderer,
     bool CorrectMotive,
     bool StrongEvidence,
     string Grade,
     string Headline,
-    string AccusedId,
+    IReadOnlyList<string> AccusedIds,
     MotiveKind Motive,
-    string? EvidenceId);
+    string? EvidenceId,
+    bool Partial = false)
+{
+    /// <summary>The first person named, or empty.</summary>
+    public string AccusedId => AccusedIds.Count > 0 ? AccusedIds[0] : string.Empty;
+
+    public bool DeclaredAccident => AccusedIds.Count == 0;
+}

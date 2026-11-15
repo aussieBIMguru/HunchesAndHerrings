@@ -78,8 +78,34 @@ public partial class MainWindow
             return;
         }
 
+        if (key.StartsWith("p:", StringComparison.Ordinal))
+        {
+            return;
+        }
+
         _game.ToggleCircle(key);
         _sound.Play(Sfx.Quill, 0.4);
+        _journal.Refresh(BuildJournalEntries());
+        RefreshJournalLauncher();
+    }
+
+    private void OnJournalHighlight(string key, int first, int last, bool erase)
+    {
+        if (_game is null || key.StartsWith("p:", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (erase)
+        {
+            _game.EraseHighlight(key, first, last);
+        }
+        else
+        {
+            _game.AddHighlight(key, first, last);
+        }
+
+        _sound.Play(Sfx.Quill, erase ? 0.25 : 0.4);
         _journal.Refresh(BuildJournalEntries());
         RefreshJournalLauncher();
     }
@@ -107,10 +133,29 @@ public partial class MainWindow
         GameSession g = _game;
         var clashing = g.Contradictions.SelectMany(x => new[] { x.ClueA, x.ClueB }).ToHashSet();
 
+        // All the small points circled inside entries, gathered on one page (shown under "Circled").
+        var points = new List<string>();
+        foreach (JournalItem item in g.Journal)
+        {
+            var phrases = g.HighlightedPhrases(item.Key);
+            if (phrases.Count > 0)
+            {
+                string from = item.IsClue ? g.GetClue(item.RefId)?.Title ?? "?" : "a contradiction";
+                points.AddRange(phrases.Select(p => $"\u201C{p}\u201D ({from})"));
+            }
+        }
+
+        if (points.Count > 0)
+        {
+            result.Add(new JournalEntry("p:summary", "Points", string.Empty, "Points circled", $"{points.Count} small points, gathered together",
+                string.Join("  ·  ", points), Ui.RedInk, Array.Empty<string>(), true, null, false));
+        }
+
         foreach (JournalItem item in g.Journal)
         {
             string stamp = Clock.Format(item.Minute);
             bool circled = g.Circled.Contains(item.Key);
+            IReadOnlyList<WordSpan>? spans = g.Highlights.TryGetValue(item.Key, out List<WordSpan>? found) ? found : null;
 
             if (!item.IsClue)
             {
@@ -118,7 +163,7 @@ public partial class MainWindow
                 if (clash is not null)
                 {
                     result.Add(new JournalEntry(item.Key, "Clashes", stamp, "Contradiction!", "Two things in this journal can't both be true",
-                        clash.Description, Ui.RedInk, Array.Empty<string>(), circled, null, false));
+                        clash.Description, Ui.RedInk, Array.Empty<string>(), circled, null, false, spans));
                 }
 
                 continue;
@@ -163,7 +208,7 @@ public partial class MainWindow
             };
 
             Brush ink = clue.Kind == ClueKind.Report || viaSergeant ? Ui.BlueInk : Ui.Ink;
-            result.Add(new JournalEntry(item.Key, category, stamp, clue.Title, SourceLine(clue), clue.Text, ink, badges, circled, action, actionEnabled));
+            result.Add(new JournalEntry(item.Key, category, stamp, clue.Title, SourceLine(clue), clue.Text, ink, badges, circled, action, actionEnabled, spans));
         }
 
         return result;
@@ -174,7 +219,7 @@ public partial class MainWindow
         GameSession game = _game!;
         if (clue.SpeakerId is not null)
         {
-            return clue.Kind == ClueKind.Report
+            return clue.Kind == ClueKind.Report && clue.SpeakerId != game.Case.Rival?.Detective.Id
                 ? $"as reported by {game.Case.SergeantName}"
                 : $"in the words of {game.Case.NameOf(clue.SpeakerId)}";
         }

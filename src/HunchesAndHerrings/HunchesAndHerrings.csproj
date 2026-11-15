@@ -21,6 +21,7 @@
   <ItemGroup>
     <Resource Include="Assets\HunchesAndHerrings.ico" />
     <Resource Include="Assets\HunchesAndHerrings.png" />
+    <Resource Include="Assets\Portraits\*.jpg" />
   </ItemGroup>
 
   <ItemGroup>

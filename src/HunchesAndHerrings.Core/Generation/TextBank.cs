@@ -33,6 +33,7 @@ public static class TextBank
         [RoomIds.Quarters] = new[] { "abed", "darning stockings" },
         [RoomIds.Landing] = new[] { "passing through" },
         [RoomIds.BackPassage] = new[] { "passing through" },
+        [RoomIds.Away] = new[] { "home in the village", "on the road home" },
     };
 
     public static string Activity(string roomId, Random rng) =>
@@ -69,6 +70,7 @@ public static class TextBank
             RoleKind.Spouse => lord ? "my husband" : "my wife",
             RoleKind.Heir => lord ? "my uncle" : "my aunt",
             RoleKind.Ward => "my guardian",
+            RoleKind.Child => lord ? "my father" : "my mother",
             _ when speaker.Station == Station.Servant => lord ? "his lordship" : "her ladyship",
             _ => victim.ShortName,
         };
@@ -104,141 +106,33 @@ public static class TextBank
 
     // ------------------------------------------------------------------ traits
 
-    public static string TraitSelf(TraitCategory category, string value, Random rng) => category switch
-    {
-        TraitCategory.Smoking => value switch
-        {
-            "None" => rng.Pick(new[] { "I've never touched tobacco. A filthy habit.", "Smoke? Never. I can't abide the smell." }),
-            "Pipe" => rng.Pick(new[] { "I take a pipe of an evening; it settles the nerves.", "A pipe after supper, same as my father before me." }),
-            "Cigar" => rng.Pick(new[] { "A cigar after dinner, nothing more.", "I enjoy a good Havana, if that's a crime." }),
-            _ => rng.Pick(new[] { "The odd cigarette. Turkish, if you must know.", "A cigarette now and then. Don't look so shocked." }),
-        },
-        TraitCategory.Handedness => value == "Left"
-            ? rng.Pick(new[] { "I write with my left hand; they never could beat it out of me at school.", "Cack-handed, my old nurse called me. The left does all the work." })
-            : rng.Pick(new[] { "Right-handed, like any sensible person.", "I do everything with my right hand, {DET}. Why?" }),
-        TraitCategory.ShoeSize => value switch
-        {
-            "Small" => "My boots? I've small feet; the cobbler says so every time.",
-            "Medium" => "My boots are an ordinary size. Nothing remarkable.",
-            _ => "I've feet like barges. My boots are made special in the village.",
-        },
-        TraitCategory.Allergy => value switch
-        {
-            "None" => "Nothing troubles my constitution, thank you.",
-            "Lilies" => "Lilies set me sneezing something terrible. I can't stay in a room with them.",
-            "Cats" => "I can't be near that cat; my eyes stream for hours.",
-            "Horsehair" => "Horsehair brings me out in hives, so I keep off the settees.",
-            _ => "Dust sets my chest wheezing. I keep out of the shut-up rooms.",
-        },
-        _ => value == TraitRules.Frail
-            ? rng.Pick(new[] { "My gout has been dreadful; I can barely lift a teacup this week.", "I sprained my wrist last Tuesday. It's still strapped, see?", "My back has been bad all winter. I can't lift a thing." })
-            : rng.Pick(new[] { "Strong as an ox, me.", "I'm hale enough, thank you." }),
-    };
+    public static string TraitSelf(TraitCategory category, string value) =>
+        TraitCatalog.Get(category).Value(value).Self;
 
-    public static string TraitOther(TraitCategory category, string value, Character t, Random rng)
-    {
-        string n = t.ShortName;
-        return category switch
-        {
-            TraitCategory.Smoking => value switch
-            {
-                "None" => $"{n} doesn't smoke. Won't have tobacco near {t.Him}.",
-                "Pipe" => rng.Pick(new[] { $"{n}'s never without that pipe.", $"{n} smokes a pipe; you can smell it on the stairs." }),
-                "Cigar" => $"{n} smokes cigars. The curtains reek of them.",
-                _ => $"{n} has taken up cigarettes. Very modern.",
-            },
-            TraitCategory.Handedness => value == "Left"
-                ? $"{n} is left-handed. Writes all smudged and backwards."
-                : $"{n}? Right-handed, I'm sure of it.",
-            TraitCategory.ShoeSize => value switch
-            {
-                "Small" => $"{n} has dainty little feet.",
-                "Medium" => $"{n}'s boots are an ordinary size. I've cleaned them, I'd know.",
-                _ => $"{n} has enormous feet. Leaves prints like a carthorse.",
-            },
-            TraitCategory.Allergy => value switch
-            {
-                "None" => $"{n} is as healthy as a horse.",
-                "Lilies" => $"{n} can't abide lilies. Sneezes fit to wake the dead.",
-                "Cats" => $"{n} goes red and streaming if the cat comes near.",
-                "Horsehair" => $"{n} won't sit on a horsehair settee. Comes out in hives.",
-                _ => $"{n} wheezes at the first speck of dust.",
-            },
-            _ => value == TraitRules.Frail
-                ? $"{n} is in a bad way. Gout, or a bad back; can barely lift a cup."
-                : $"{n}'s as strong as a navvy.",
-        };
-    }
+    public static string TraitOther(TraitCategory category, string value, Character t) =>
+        TraitCatalog.Fill(TraitCatalog.Get(category).Value(value).Other, t);
 
     public static (string Title, string Text) TraitDocument(TraitCategory category, string value, Character t)
     {
-        string n = t.ShortName;
-        return category switch
-        {
-            TraitCategory.Smoking => value switch
-            {
-                "None" => ("A temperance pledge", $"A signed temperance card in {n}'s name, promising to abjure strong drink and tobacco alike."),
-                "Pipe" => ("A briar pipe", $"A well-used briar pipe and a pouch of shag tobacco, initialled {t.Initials}. {n}'s, plainly."),
-                "Cigar" => ("A cigar case", $"A silver cigar case engraved for {n}, half full of Havanas."),
-                _ => ("Turkish cigarettes", $"A packet of Turkish cigarettes and a vesta case belonging to {n}."),
-            },
-            TraitCategory.Handedness => value == "Left"
-                ? ("A smudged letter", $"A half-written letter by {n}: the ink is smeared along every line, as only a left-handed writer smudges it.")
-                : ("A neat letter", $"A letter by {n} in a neat, right-slanting hand; the pen rests to the right of the blotter."),
-            TraitCategory.ShoeSize => ("A pair of boots", $"{n}'s boots stand by the bed: {BootWords(value)}."),
-            TraitCategory.Allergy => value switch
-            {
-                "None" => ("A medical certificate", $"An insurance medical certificate for {n}: \"Robust constitution. No sensitivities of any kind.\""),
-                "Lilies" => ("A prescription", $"A prescription for {n}: \"For the hay fever brought on by lilies. Avoid the flowers entirely.\""),
-                "Cats" => ("A prescription", $"A prescription for {n}: \"For the violent reaction to cats. Keep the animal away.\""),
-                "Horsehair" => ("A prescription", $"A prescription for {n}: \"Ointment for the hives caused by horsehair.\""),
-                _ => ("A prescription", $"A prescription for {n}: \"For the asthma aggravated by dust. Avoid unaired rooms.\""),
-            },
-            _ => value == TraitRules.Frail
-                ? ("Liniment and a sling", $"A bottle of liniment and a sling, with a doctor's note: \"{n}: no lifting of any kind for a fortnight.\"")
-                : ("A pair of dumb-bells", $"A pair of iron dumb-bells, plainly well used by {n}."),
-        };
+        TraitValue v = TraitCatalog.Get(category).Value(value);
+        return (v.DocTitle, TraitCatalog.Fill(v.DocText, t));
     }
-
-    public static string BootWords(string size) => size switch
-    {
-        "Small" => "small and narrow",
-        "Medium" => "of quite ordinary size",
-        _ => "enormous",
-    };
 
     // ------------------------------------------------------------------ scene
 
-    public static string SceneText(TraitCategory category, string value, string roomId)
+    /// <summary>What a print might have been left in, depending on the room.</summary>
+    public static string Spill(string roomId) => roomId switch
     {
-        string spill = roomId switch
-        {
-            RoomIds.Kitchen => "flour",
-            RoomIds.Gardens or RoomIds.Conservatory => "soft earth",
-            RoomIds.Boiler or RoomIds.WineCellar => "coal dust",
-            _ => "spilled ink",
-        };
+        RoomIds.Kitchen or RoomIds.Pantry => "flour",
+        RoomIds.Gardens or RoomIds.Conservatory => "soft earth",
+        RoomIds.Boiler or RoomIds.WineCellar => "coal dust",
+        RoomIds.Scullery => "soapy water",
+        RoomIds.Dining => "spilled port",
+        _ => "spilled ink",
+    };
 
-        return category switch
-        {
-            TraitCategory.Smoking => value switch
-            {
-                "Pipe" => "Fresh pipe dottle has been knocked out by the body, still faintly warm when the body was found. The killer smokes a pipe.",
-                "Cigar" => "A half-smoked cigar has been ground into the floor by the body. The killer smokes cigars.",
-                _ => "Two cigarette ends lie by the body, the paper still fresh. The killer smokes cigarettes.",
-            },
-            TraitCategory.Handedness => "The wound is on the right side of the head, dealt from the front: the blow was struck left-handed.",
-            TraitCategory.ShoeSize => $"A clear boot-print in {spill} beside the body: {BootWords(value)}.",
-            TraitCategory.Allergy => value switch
-            {
-                "Lilies" => "A great vase of fresh lilies stands by the body, their pollen dusting everything. Anyone sensitive to lilies would have been sneezing helplessly.",
-                "Cats" => "The house cat was found shut in with the body; its hairs are on everything. Anyone who reacts to cats could not have endured it.",
-                "Horsehair" => "The horsehair settee was torn open in the struggle and stuffing is everywhere. Anyone sensitive to horsehair would be covered in hives.",
-                _ => "The struggle raised a great cloud of dust in the long-shut room. Anyone with a dust-sensitive chest would have been choking.",
-            },
-            _ => "The blow was delivered with terrible force, and the body was dragged several feet. No feeble or injured hand did this.",
-        };
-    }
+    public static string SceneText(TraitCategory category, string value, string roomId) =>
+        TraitCatalog.Fill(TraitCatalog.Get(category).Value(value).Scene ?? string.Empty, null, Spill(roomId));
 
     // ------------------------------------------------------------------ motives
 
@@ -251,6 +145,13 @@ public static class TextBank
         MotiveKind.Blackmail => $"{Capitalise(victimRef)} knew something about me. Something old. It doesn't matter now.",
         MotiveKind.Revenge => $"{Capitalise(victimRef)}'s family ruined mine, years ago. That's old history.",
         MotiveKind.Disinheritance => $"{Capitalise(victimRef)} was talking of changing the will. We quarrelled about it.",
+        MotiveKind.Affair => $"There was... an attachment. {Capitalise(victimRef)} found out. That's all I'll say.",
+        MotiveKind.Silence => $"{Capitalise(victimRef)} knew something about me I'd rather the world didn't.",
+        MotiveKind.Recognition => $"{Capitalise(victimRef)} and I had a private understanding. A family matter.",
+        MotiveKind.Negligence => $"I attended {victimRef} professionally. There's no more to it than that.",
+        MotiveKind.Imposture => $"{Capitalise(victimRef)} asked me some impertinent questions about my past. I answered them.",
+        MotiveKind.Insurance => $"Yes, there's a policy on {victimRef}'s life. A prudent arrangement.",
+        MotiveKind.Theft => $"{Capitalise(victimRef)} accused me of taking things. It was a misunderstanding.",
         _ => rng.Pick(new[] { $"I'd no quarrel with {victimRef}.", $"{Capitalise(victimRef)} was good to me." }),
     };
 
@@ -271,6 +172,13 @@ public static class TextBank
         MotiveKind.Blackmail => $"I heard {victimRef} had something on {t.ShortName}. Something nasty.",
         MotiveKind.Revenge => $"{t.ShortName} has never forgiven the family for what happened to {t.His} father.",
         MotiveKind.Disinheritance => $"{Capitalise(victimRef)} meant to cut {t.ShortName} out of the will.",
+        MotiveKind.Affair => $"{t.ShortName} has been carrying on with someone in this house. I've seen the looks.",
+        MotiveKind.Silence => $"{t.ShortName} has a secret, and {victimRef} had found it out. I'd stake my life on it.",
+        MotiveKind.Recognition => $"Have you looked at {t.ShortName}'s face? The family likeness. Nobody says it aloud.",
+        MotiveKind.Negligence => $"{t.ShortName} was in a fearful state this morning. Kept asking after the medicine bottle.",
+        MotiveKind.Imposture => $"There's something not right about {t.ShortName}. {t.HeCap} gets the little things wrong.",
+        MotiveKind.Insurance => $"{t.ShortName} took out a policy on {victimRef}'s life not three months ago.",
+        MotiveKind.Theft => $"Things have been going missing, and {victimRef} had it in mind that {t.ShortName} was taking them.",
         _ => $"{t.ShortName}? No reason in the world to wish anyone harm.",
     };
 
@@ -283,6 +191,13 @@ public static class TextBank
         MotiveKind.Blackmail => ("A sealed envelope", $"A sealed envelope in {victim.ShortName}'s desk, marked \"Concerning {t.ShortName}: the Brighton affair\". Inside, a list of payments."),
         MotiveKind.Revenge => ("A yellowed cutting", $"A yellowed newspaper cutting about the ruin of the {t.Surname} family, heavily underlined. It belongs to {t.ShortName}."),
         MotiveKind.Disinheritance => ("A draft will", $"A draft of a new will, unsigned, cutting {t.ShortName} out entirely."),
+        MotiveKind.Affair => ("Love letters", $"A ribbon-tied bundle of love letters to {t.ShortName}, the last one blotted: \"If {victim.ShortName} ever learns of this, we are finished.\""),
+        MotiveKind.Silence => ("A note in the victim's hand", $"A note in {victim.ShortName}'s hand: \"Spoke to {t.ShortName}. Gave {t.Him} until Monday to tell the truth, or I shall.\""),
+        MotiveKind.Recognition => ("A baptismal certificate", $"A baptismal certificate for {t.FirstName}, \"father unnamed\", with a note pinned to it in {victim.ShortName}'s hand: \"Mine. God forgive me.\""),
+        MotiveKind.Negligence => ("A prescription", $"A prescription in {t.ShortName}'s hand for {victim.ShortName}'s sleeping draught. The dose is written as thirty drops: ten times the usual."),
+        MotiveKind.Imposture => ("A letter of inquiry", $"A reply to {victim.ShortName} from the agent in London: \"I can find no record of any {t.FullName}. The person you describe is not who he claims.\""),
+        MotiveKind.Insurance => ("An insurance policy", $"A life policy on {victim.ShortName} for £{rng.Next(3, 20) * 1000}, the beneficiary {t.ShortName}, dated this spring."),
+        MotiveKind.Theft => ("A list of missing things", $"A list in {victim.ShortName}'s hand: a snuff box, two spoons, a brooch. Beside it: \"{t.Initials}? Speak to the constable.\""),
         _ => ("A letter", $"An unremarkable letter to {t.ShortName}."),
     };
 
@@ -295,6 +210,14 @@ public static class TextBank
         MotiveKind.Blackmail => "was being blackmailed",
         MotiveKind.Revenge => "an old family grudge",
         MotiveKind.Disinheritance => "was to be cut out of the will",
+        MotiveKind.Affair => "an affair",
+        MotiveKind.Silence => "a secret the victim knew",
+        MotiveKind.Recognition => "a secret parentage",
+        MotiveKind.Negligence => "a medical error",
+        MotiveKind.Imposture => "may not be who they claim",
+        MotiveKind.Insurance => "an insurance policy",
+        MotiveKind.Theft => "suspected of stealing",
+        MotiveKind.Accident => "no motive",
         _ => "no motive",
     };
 
@@ -307,6 +230,13 @@ public static class TextBank
         MotiveKind.Blackmail => $"{victim.ShortName} had been bleeding {m.ShortName} dry over an old scandal.",
         MotiveKind.Revenge => $"{m.ShortName} had nursed a grudge for years over the ruin of {m.His} family.",
         MotiveKind.Disinheritance => $"{victim.ShortName} was about to cut {m.ShortName} out of the will.",
+        MotiveKind.Affair => $"An affair lay at the root of it: {m.ShortName} would not let {victim.ShortName} stand in the way.",
+        MotiveKind.Silence => $"{victim.ShortName} had discovered {m.ShortName}'s secret and meant to expose it.",
+        MotiveKind.Recognition => $"{m.ShortName} was {victim.ShortName}'s unacknowledged child, and had been denied once too often.",
+        MotiveKind.Negligence => $"{m.ShortName} had made a fatal error with the dose, and lied to save {m.His} reputation.",
+        MotiveKind.Imposture => $"{victim.ShortName} had found out that {m.ShortName} was an impostor.",
+        MotiveKind.Insurance => $"{m.ShortName} stood to collect on a policy on {victim.ShortName}'s life.",
+        MotiveKind.Theft => $"{victim.ShortName} had caught {m.ShortName} stealing, and meant to call the constable.",
         _ => $"{m.ShortName}'s reasons died with {victim.ShortName}.",
     };
 

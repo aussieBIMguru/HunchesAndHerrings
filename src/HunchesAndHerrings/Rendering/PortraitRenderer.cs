@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -42,7 +43,7 @@ internal static class PortraitRenderer
 
     public static DrawingImage Get(Character character, bool police = false)
     {
-        string key = $"{character.Id}:{character.PortraitSeed}:{police}";
+        string key = $"{character.Id}:{character.PortraitSeed}:{character.PortraitId}:{police}";
         if (!Cache.TryGetValue(key, out DrawingImage? image))
         {
             image = new DrawingImage(Build(character, police));
@@ -55,6 +56,11 @@ internal static class PortraitRenderer
 
     private static Drawing Build(Character c, bool police)
     {
+        if (!police && c.PortraitId is { } id && Painted(id) is { } painted)
+        {
+            return painted;
+        }
+
         var rng = new Random(c.PortraitSeed);
         var root = new DrawingGroup();
         var frame = new EllipseGeometry(new Point(50, 60), 47, 57);
@@ -106,6 +112,34 @@ internal static class PortraitRenderer
         root.Children.Add(new GeometryDrawing(null, ThinPen, new EllipseGeometry(new Point(50.7, 60.5), 45, 55)));
         root.Freeze();
         return root;
+    }
+
+    /// <summary>A painted portrait from Assets/Portraits, set in the same oval frame as the ink drawings.</summary>
+    private static Drawing? Painted(string id)
+    {
+        try
+        {
+            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri($"pack://application:,,,/Assets/Portraits/{id}.jpg");
+            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+            bitmap.Freeze();
+
+            var frame = new EllipseGeometry(new Point(50, 60), 47, 57);
+            var root = new DrawingGroup();
+            var inner = new DrawingGroup { ClipGeometry = frame };
+            inner.Children.Add(new ImageDrawing(bitmap, new Rect(3, 0, 94, 122)));
+            root.Children.Add(inner);
+            root.Children.Add(new GeometryDrawing(null, InkPen, frame));
+            root.Children.Add(new GeometryDrawing(null, ThinPen, new EllipseGeometry(new Point(50.7, 60.5), 45, 55)));
+            root.Freeze();
+            return root;
+        }
+        catch (Exception ex) when (ex is IOException or UriFormatException or NotSupportedException)
+        {
+            return null;
+        }
     }
 
     private static void DrawCoat(DrawingGroup g, Character c, Random rng)
@@ -224,15 +258,9 @@ internal static class PortraitRenderer
         double mouth = 66 + rng.Next(-1, 3);
         Add(g, null, ThinPen, FormattableString.Invariant($"M 45,67 Q 50,{mouth:0.0} 55,67"));
 
-        bool spectacles = c.Role switch
-        {
-            RoleKind.Doctor => rng.NextDouble() < 0.7,
-            RoleKind.Governess or RoleKind.Solicitor => rng.NextDouble() < 0.6,
-            RoleKind.Housekeeper or RoleKind.Reverend => rng.NextDouble() < 0.3,
-            _ => rng.NextDouble() < 0.08,
-        };
+        bool spectacles = c.Traits.Wears(TraitCategory.Spectacles, "Spectacles");
 
-        if (c.Role == RoleKind.Colonel)
+        if (c.Role == RoleKind.Colonel && spectacles)
         {
             g.Children.Add(new GeometryDrawing(null, InkPen, new EllipseGeometry(new Point(56, 52), 4.6, 4.6)));
             Add(g, null, ThinPen, "M 60,55 Q 66,70 60,88");
@@ -308,8 +336,15 @@ internal static class PortraitRenderer
             Color.FromArgb(0xD0, 0xA8, 0x8A, 0x5A),
             Color.FromArgb(0xE0, 0x1E, 0x18, 0x14),
         };
-        bool grey = c.Traits.Frail || c.Role is RoleKind.Colonel or RoleKind.Reverend or RoleKind.Housekeeper && rng.NextDouble() < 0.6;
-        return Frozen(grey ? Color.FromArgb(0xD0, 0x9A, 0x96, 0x8E) : tones[rng.Next(tones.Length)]);
+        _ = rng;
+        return Frozen(c.Traits.ValueOf(TraitCategory.HairColour) switch
+        {
+            "Black" => tones[3],
+            "Auburn" => tones[1],
+            "Fair" => tones[2],
+            "Grey" => Color.FromArgb(0xD0, 0x9A, 0x96, 0x8E),
+            _ => tones[0],
+        });
     }
 
     private static void Add(DrawingGroup g, Brush? fill, Pen? pen, string data) =>

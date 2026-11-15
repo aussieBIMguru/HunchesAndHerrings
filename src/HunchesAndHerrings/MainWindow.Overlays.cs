@@ -153,9 +153,28 @@ public partial class MainWindow
         var endHour = Option(1, "Name the murderer by", new[] { "As the rank" }.Concat(Enumerable.Range(CaseOptions.EarliestEndHour, CaseOptions.LatestEndHour - CaseOptions.EarliestEndHour + 1).Select(Clock.Hour)));
         var rescues = Option(2, "Sergeant's rescues", new[] { "As the rank", "None", "One", "Two", "Three" });
         var herrings = Option(3, "Red herrings", new[] { "As the rank", "On: lies, frames and secrets", "Off: only the murderer lies" });
+        var kinds = new (string Label, CaseModel? Model)[]
+        {
+            ("A surprise (any kind)", null),
+            ("A lone killer", CaseModel.LoneKiller),
+            ("Two conspirators", CaseModel.Conspiracy),
+            ("The children, together", CaseModel.FamilyPact),
+            ("A house full of secrets", CaseModel.HiddenSecrets),
+            ("A secret heir", CaseModel.SecretHeir),
+            ("Perhaps no murder at all", CaseModel.Accident),
+            ("The doctor's poison", CaseModel.DoctorPoison),
+            ("The doctor's blunder", CaseModel.DoctorNegligence),
+            ("An affair", CaseModel.Affair),
+            ("The wrong victim", CaseModel.MistakenIdentity),
+            ("An impostor", CaseModel.Impostor),
+        };
+        var kind = Option(4, "Kind of case", kinds.Select(k => k.Label));
         var reliable = new CheckBox { Content = "The sergeant never mishears", Margin = new Thickness(0, 6, 0, 0) };
+        var rivalBox = new CheckBox { Content = "A rival detective on the case (a nuisance, with the odd tip)", Margin = new Thickness(0, 4, 0, 0) };
         left.Children.Add(tuning);
         left.Children.Add(reliable);
+        left.Children.Add(rivalBox);
+        left.Children.Add(Ui.Text("Picking a kind of case gives the game away; leave it on \"a surprise\" for the real thing.", 11, Ui.InkFaded, italic: true));
 
         void UpdatePreset()
         {
@@ -209,6 +228,8 @@ public partial class MainWindow
                 MaxRescues = rescues.SelectedIndex > 0 ? rescues.SelectedIndex - 1 : null,
                 RedHerrings = herrings.SelectedIndex switch { 1 => true, 2 => false, _ => null },
                 ReliableSergeant = reliable.IsChecked == true,
+                Rival = rivalBox.IsChecked == true,
+                Model = kinds[Math.Max(0, kind.SelectedIndex)].Model,
             };
             Detective detective = CurrentDetective();
             PlayerProfile.Save(detective);
@@ -350,6 +371,15 @@ public partial class MainWindow
             cast.Children.Add(card);
         }
 
+        foreach (Character s in c.Children.Concat(c.Rival is { } rv ? new[] { rv.Detective } : Array.Empty<Character>()))
+        {
+            var card = new StackPanel { Width = 110, Margin = new Thickness(0, 0, 8, 8), Opacity = 0.8 };
+            card.Children.Add(PortraitRenderer.Create(s, 70));
+            card.Children.Add(new TextBlock { Text = s.ShortName, FontFamily = Ui.Hand, FontSize = 14, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Ink });
+            card.Children.Add(new TextBlock { Text = $"{s.RoleLabel} (not a suspect)", FontFamily = Ui.Body, FontSize = 11, FontStyle = FontStyles.Italic, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Foreground = Ui.InkFaded });
+            cast.Children.Add(card);
+        }
+
         panel.Children.Add(cast);
         panel.Children.Add(Ui.Rule());
         panel.Children.Add(Ui.Handwriting("How to investigate", 18, weight: FontWeights.Bold));
@@ -362,7 +392,10 @@ public partial class MainWindow
             "The murderer lies about where they were. When accounts clash, the notebook flags it and you earn Deduction.",
             $"Spend Deduction on a Hunch, or to Scrutinise a statement in the journal. Talk to {c.SergeantName} (bottom right): \"search the library\", \"question the cook\", \"where is the colonel?\", \"what next?\"",
             "Everything you learn is written into your journal. Circle the entries that matter, and circle up to three suspects to keep an eye on them on the plan.",
-            "When you're sure, Accuse: name the murderer, their motive, and the evidence that proves it.",
+            "People with secrets lie about them. Find the proof among their things, then confront them with it: they'll come clean, about that at least.",
+            "Callers from outside (marked ⌂) aren't always at the house. Send for them, or catch them when they call.",
+            "Not every case is one killer. Sometimes two act together, sometimes a whole family, and sometimes nobody killed anyone at all.",
+            "When you're sure, Accuse: name the guilty (one or more, or nobody), the motive, and the evidence that proves it.",
         };
         foreach (string tip in tips)
         {
@@ -394,7 +427,7 @@ public partial class MainWindow
         panel.Children.Add(Ui.Title(forced ? "Time is up" : "J'accuse", 40));
         panel.Children.Add(Ui.Text(forced
             ? "The Chief Constable's carriage is at the door. You must name the murderer now."
-            : "Name the murderer, why they did it, and the evidence that proves it. This closes the case.", 14));
+            : "Name the guilty, why they did it, and the evidence that proves it. Tick more than one if you believe they acted together, or none at all if you believe there was no murder. This closes the case.", 14));
         panel.Children.Add(Ui.Rule());
 
         var columns = new Grid();
@@ -404,8 +437,9 @@ public partial class MainWindow
 
         // Suspects
         var who = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
-        who.Children.Add(Ui.Handwriting("The murderer", 17, weight: FontWeights.Bold));
-        var suspectRadios = new List<(RadioButton Radio, string Id)>();
+        who.Children.Add(Ui.Handwriting("The guilty", 17, weight: FontWeights.Bold));
+        var suspectRadios = new List<(CheckBox Radio, string Id)>();
+        var noMurder = new CheckBox { Content = "Nobody: it was no murder", FontFamily = Ui.Body, FontSize = 14, Foreground = Ui.Ink, Margin = new Thickness(0, 6, 0, 0) };
         foreach (Character s in c.Suspects)
         {
             var content = new StackPanel { Orientation = Orientation.Horizontal };
@@ -419,10 +453,20 @@ public partial class MainWindow
                 Margin = new Thickness(6, 0, 0, 0),
                 Foreground = Ui.Ink,
             });
-            var radio = new RadioButton { GroupName = "Accused", Content = content };
+            var radio = new CheckBox { Content = content, Margin = new Thickness(0, 1, 0, 1) };
+            radio.Checked += (_, _) => noMurder.IsChecked = false;
             suspectRadios.Add((radio, s.Id));
             who.Children.Add(radio);
         }
+
+        noMurder.Checked += (_, _) =>
+        {
+            foreach (var (box, _) in suspectRadios)
+            {
+                box.IsChecked = false;
+            }
+        };
+        who.Children.Add(noMurder);
 
         Grid.SetColumn(who, 0);
         columns.Children.Add(who);
@@ -484,16 +528,16 @@ public partial class MainWindow
         var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0) };
         var confirm = Ui.Button("Make the accusation", () =>
         {
-            var accused = suspectRadios.FirstOrDefault(r => r.Radio.IsChecked == true);
+            var accused = suspectRadios.Where(r => r.Radio.IsChecked == true).Select(r => r.Id).ToList();
             var motive = motiveRadios.FirstOrDefault(r => r.Radio.IsChecked == true);
-            if (accused.Radio is null || motive.Radio is null)
+            if ((accused.Count == 0 && noMurder.IsChecked != true) || motive.Radio is null)
             {
-                error.Text = "You must name a suspect and a motive.";
+                error.Text = "You must name at least one suspect (or declare it no murder) and a motive.";
                 return;
             }
 
             string? evidenceId = (evidence.SelectedItem as ListBoxItem)?.Tag as string;
-            Verdict verdict = _game.Accuse(accused.Id, motive.Motive, evidenceId);
+            Verdict verdict = _game.Accuse(accused, motive.Motive, evidenceId);
             _sound.Play(verdict.CorrectMurderer ? Sfx.Win : Sfx.Lose, 0.8);
             RefreshAll();
             ShowResult();
@@ -520,10 +564,10 @@ public partial class MainWindow
         }
 
         CaseFile c = _game.Case;
-        Character murderer = c.Murderer;
+        Character murderer = c.Culprits.FirstOrDefault() ?? c.Victim;
         var panel = new StackPanel { Width = 860 };
 
-        panel.Children.Add(Ui.Title(verdict.CorrectMurderer ? "Case closed" : "The wrong person", 44));
+        panel.Children.Add(Ui.Title(verdict.CorrectMurderer ? "Case closed" : verdict.Partial ? "Half the truth" : "The wrong answer", 44));
         panel.Children.Add(new TextBlock
         {
             Text = $"Grade {verdict.Grade}: {verdict.Headline}",
@@ -548,8 +592,10 @@ public partial class MainWindow
 
         panel.Children.Add(Ui.Rule());
         panel.Children.Add(Ui.Handwriting("Your accusation", 17, weight: FontWeights.Bold));
-        panel.Children.Add(Mark(verdict.CorrectMurderer, $"Murderer: {c.NameOf(verdict.AccusedId)}"));
-        panel.Children.Add(Mark(verdict.CorrectMotive, $"Motive: {RoleCatalog.MotiveName(verdict.Motive)} (truly: {RoleCatalog.MotiveName(murderer.Motive)})"));
+        string named = verdict.DeclaredAccident ? "nobody (no murder)" : TextBank.JoinNames(verdict.AccusedIds.Select(c.NameOf).ToList());
+        string truly = c.IsAccident ? "nobody: it was an accident" : TextBank.JoinNames(c.Culprits.Select(x => x.ShortName).ToList());
+        panel.Children.Add(Mark(verdict.CorrectMurderer, $"You named: {named} (truly: {truly})"));
+        panel.Children.Add(Mark(verdict.CorrectMotive, $"Motive: {RoleCatalog.MotiveName(verdict.Motive)} (truly: {RoleCatalog.MotiveName(c.CaseMotive)})"));
         string evidenceTitle = verdict.EvidenceId is not null ? _game.GetClue(verdict.EvidenceId)?.Title ?? "?" : "none chosen";
         panel.Children.Add(Mark(verdict.StrongEvidence, $"Key evidence: {evidenceTitle}"));
         var strongest = c.KeyEvidenceIds.Select(id => _game.GetClue(id)).OfType<Clue>().Select(x => x.Title).ToList();
@@ -558,8 +604,22 @@ public partial class MainWindow
             panel.Children.Add(Ui.Text($"Evidence that would have convicted: {string.Join("; ", strongest)}.", 12, Ui.InkFaded, italic: true));
         }
 
+        if (c.Rival is { } rival)
+        {
+            string theirs = rival.AccusesAccident ? "that there was no murder at all" : TextBank.JoinNames(rival.AccusesIds.Select(c.NameOf).ToList());
+            bool rivalRight = rival.AccusesAccident ? c.IsAccident : rival.AccusesIds.ToHashSet().SetEquals(c.CulpritIds) && !c.IsAccident;
+            string verdictLine = (rivalRight, verdict.CorrectMurderer) switch
+            {
+                (true, true) => "You both got there. The newspapers credit them, naturally.",
+                (true, false) => "They were right, and you weren't. They'll be insufferable.",
+                (false, true) => "They were wrong. You permit yourself a small smile.",
+                _ => "You were both wrong. Small comfort.",
+            };
+            panel.Children.Add(Ui.Text($"Your rival, {rival.Detective.ShortName}, named {theirs}. {verdictLine}", 13, Ui.BlueInk, italic: true));
+        }
+
         panel.Children.Add(Ui.Rule());
-        panel.Children.Add(Ui.Handwriting("How each innocent could have been cleared", 17, weight: FontWeights.Bold));
+        panel.Children.Add(Ui.Handwriting(c.IsAccident ? "How each person could have been cleared" : "How each innocent could have been cleared", 17, weight: FontWeights.Bold));
         foreach ((string id, Elimination elimination) in c.Eliminations)
         {
             int found = elimination.ClueIds.Count(_game.IsDiscovered);

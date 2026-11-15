@@ -16,6 +16,7 @@ public static class ContradictionFinder
 
         var locations = clues.SelectMany(c => c.Facts.OfType<LocationFact>().Select(f => (Clue: c, Fact: f))).ToList();
         var occupancies = clues.SelectMany(c => c.Facts.OfType<OccupancyFact>().Select(f => (Clue: c, Fact: f))).ToList();
+        var presences = clues.SelectMany(c => c.Facts.OfType<PresenceFact>().Select(f => (Clue: c, Fact: f))).ToList();
         var traits = clues.SelectMany(c => c.Facts.OfType<TraitFact>().Select(f => (Clue: c, Fact: f))).ToList();
 
         void Add(string kind, Clue a, Clue b, string subject, string description)
@@ -43,7 +44,7 @@ public static class ContradictionFinder
 
                 string name = caseFile.NameOf(fa.CharacterId);
                 Add("loc", ca, cb, $"{fa.CharacterId}:{fa.Slot}",
-                    $"{name} is placed in the {Room(caseFile, fa.RoomId)} ({Source(caseFile, ca)}) and in the {Room(caseFile, fb.RoomId)} ({Source(caseFile, cb)}) at {NightSlots.Short(fa.Slot)}.");
+                    $"{name} is placed {In(caseFile, fa.RoomId)} ({Source(caseFile, ca)}) and {In(caseFile, fb.RoomId)} ({Source(caseFile, cb)}) at {NightSlots.Short(fa.Slot)}.");
             }
         }
 
@@ -62,6 +63,24 @@ public static class ContradictionFinder
                     : $"only {string.Join(" and ", of.Occupants.Select(caseFile.NameOf))} was there";
                 Add("occ", lc, oc, $"{lf.CharacterId}:{lf.Slot}",
                     $"{caseFile.NameOf(lf.CharacterId)} is placed in the {Room(caseFile, lf.RoomId)} at {NightSlots.Short(lf.Slot)} ({Source(caseFile, lc)}), but {Source(caseFile, oc)} shows {who}.");
+            }
+        }
+
+        // Someone placed in (or out of) the house when a record says otherwise.
+        foreach (var (pc, pf) in presences)
+        {
+            foreach (var (lc, lf) in locations)
+            {
+                bool away = lf.RoomId == RoomIds.Away;
+                if (lc == pc || lf.CharacterId != pf.CharacterId || lf.Slot != pf.Slot || away != pf.InHouse)
+                {
+                    continue;
+                }
+
+                string where = away ? "away from the house" : $"in the {Room(caseFile, lf.RoomId)}";
+                string record = pf.InHouse ? "still in the house" : "gone from the house";
+                Add("presence", lc, pc, $"{lf.CharacterId}:{lf.Slot}",
+                    $"{caseFile.NameOf(lf.CharacterId)} is placed {where} at {NightSlots.Short(lf.Slot)} ({Source(caseFile, lc)}), but {Source(caseFile, pc)} shows {caseFile.NameOf(lf.CharacterId)} {record}.");
             }
         }
 
@@ -86,6 +105,9 @@ public static class ContradictionFinder
     }
 
     private static string Room(CaseFile caseFile, string roomId) => caseFile.Manor.NameOf(roomId);
+
+    private static string In(CaseFile caseFile, string roomId) =>
+        roomId == RoomIds.Away ? "away from the house" : $"in the {Room(caseFile, roomId)}";
 
     private static string Source(CaseFile caseFile, Clue clue) =>
         clue.SpeakerId is not null ? $"{caseFile.NameOf(clue.SpeakerId)}'s word" : clue.Title.ToLowerInvariant();

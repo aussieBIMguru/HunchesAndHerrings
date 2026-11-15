@@ -34,11 +34,11 @@ public static class RoleCatalog
             new[] { RoomIds.ServantsHall, RoomIds.Kitchen, RoomIds.Master, RoomIds.Blue, RoomIds.Rose, RoomIds.Green, RoomIds.Gallery, RoomIds.Landing },
             new[] { RoomIds.ServantsHall, RoomIds.Kitchen, RoomIds.Quarters, RoomIds.Scullery },
             RoomIds.ServantsHall, 0.25, new[] { MotiveKind.Dismissal, MotiveKind.Inheritance, MotiveKind.Revenge, MotiveKind.Blackmail }),
-        new RoleDef(RoleKind.Cook, Station.Servant, 0.15,
+        new RoleDef(RoleKind.Cook, Station.Servant, 0.3,
             new[] { RoomIds.Kitchen, RoomIds.Kitchen, RoomIds.Scullery, RoomIds.ServantsHall, RoomIds.WineCellar },
             new[] { RoomIds.Kitchen, RoomIds.ServantsHall, RoomIds.Scullery },
             RoomIds.Kitchen, 0.2, new[] { MotiveKind.Dismissal, MotiveKind.Debt, MotiveKind.Revenge }),
-        new RoleDef(RoleKind.Gardener, Station.Servant, 0.9,
+        new RoleDef(RoleKind.Gardener, Station.Servant, 0.75,
             new[] { RoomIds.Gardens, RoomIds.Gardens, RoomIds.Conservatory, RoomIds.Boiler },
             new[] { RoomIds.ServantsHall, RoomIds.Boiler, RoomIds.Conservatory, RoomIds.Kitchen },
             RoomIds.Conservatory, 0.25, new[] { MotiveKind.Dismissal, MotiveKind.Revenge, MotiveKind.Inheritance }),
@@ -50,7 +50,7 @@ public static class RoleCatalog
             new[] { RoomIds.Quarters, RoomIds.Master, RoomIds.Pantry, RoomIds.Boiler, RoomIds.Billiard },
             new[] { RoomIds.Quarters, RoomIds.ServantsHall, RoomIds.Boiler, RoomIds.WineCellar },
             RoomIds.Quarters, 0.05, new[] { MotiveKind.Dismissal, MotiveKind.Blackmail, MotiveKind.Debt }),
-        new RoleDef(RoleKind.Governess, Station.Servant, 0.0,
+        new RoleDef(RoleKind.Governess, Station.Servant, 0.3,
             new[] { RoomIds.Library, RoomIds.Gallery, RoomIds.Gardens, RoomIds.Quarters, RoomIds.Drawing },
             new[] { RoomIds.Quarters, RoomIds.Library, RoomIds.Gallery },
             RoomIds.Quarters, 0.1, new[] { MotiveKind.Jealousy, MotiveKind.Dismissal, MotiveKind.Blackmail, MotiveKind.Revenge }),
@@ -74,7 +74,7 @@ public static class RoleCatalog
             new[] { RoomIds.Billiard, RoomIds.Library, RoomIds.Gardens, RoomIds.Drawing },
             new[] { RoomIds.Billiard, RoomIds.Library, RoomIds.Drawing },
             string.Empty, 0.3, new[] { MotiveKind.Debt, MotiveKind.Revenge, MotiveKind.Blackmail }),
-        new RoleDef(RoleKind.Doctor, Station.Guest, 0.8,
+        new RoleDef(RoleKind.Doctor, Station.Guest, 0.7,
             new[] { RoomIds.Library, RoomIds.Drawing, RoomIds.Conservatory, RoomIds.Gallery },
             new[] { RoomIds.Library, RoomIds.Drawing, RoomIds.Billiard },
             string.Empty, 0.1, new[] { MotiveKind.Debt, MotiveKind.Blackmail, MotiveKind.Jealousy }),
@@ -94,10 +94,37 @@ public static class RoleCatalog
             new[] { RoomIds.Drawing, RoomIds.Gallery, RoomIds.Conservatory, RoomIds.Gardens },
             new[] { RoomIds.Drawing, RoomIds.Gallery, RoomIds.Library },
             string.Empty, 0.1, new[] { MotiveKind.Jealousy, MotiveKind.Inheritance, MotiveKind.Blackmail }),
+        new RoleDef(RoleKind.Child, Station.Family, 0.55,
+            new[] { RoomIds.Billiard, RoomIds.Library, RoomIds.Gardens, RoomIds.Drawing, RoomIds.Gallery },
+            new[] { RoomIds.Billiard, RoomIds.Library, RoomIds.Drawing, RoomIds.Gallery },
+            string.Empty, 0.03, new[] { MotiveKind.Inheritance, MotiveKind.Debt, MotiveKind.Disinheritance, MotiveKind.Insurance }),
+    };
+
+    /// <summary>People who don't live at the house but call at it: they can be sent for.</summary>
+    public static IReadOnlyList<RoleDef> Visitors { get; } = new[]
+    {
+        new RoleDef(RoleKind.Doctor, Station.Guest, 0.7,
+            new[] { RoomIds.Master, RoomIds.Drawing, RoomIds.Hall },
+            new[] { RoomIds.Master, RoomIds.Drawing, RoomIds.Library },
+            RoomIds.Hall, 0.1, new[] { MotiveKind.Debt, MotiveKind.Blackmail, MotiveKind.Insurance }),
+        new RoleDef(RoleKind.Constable, Station.Guest, 0.8,
+            new[] { RoomIds.Hall, RoomIds.ServantsHall, RoomIds.Kitchen },
+            new[] { RoomIds.ServantsHall, RoomIds.Kitchen, RoomIds.Hall },
+            RoomIds.Hall, 0.05, new[] { MotiveKind.Revenge }),
+        new RoleDef(RoleKind.Reverend, Station.Guest, 1.0,
+            new[] { RoomIds.Drawing, RoomIds.Library, RoomIds.Hall },
+            new[] { RoomIds.Drawing, RoomIds.Library },
+            RoomIds.Hall, 0.3, new[] { MotiveKind.Revenge, MotiveKind.Blackmail }),
+        new RoleDef(RoleKind.Solicitor, Station.Guest, 1.0,
+            new[] { RoomIds.Study, RoomIds.Library, RoomIds.Hall },
+            new[] { RoomIds.Study, RoomIds.Library },
+            RoomIds.Hall, 0.15, new[] { MotiveKind.Debt, MotiveKind.Disinheritance }),
     };
 
     public static RoleDef Get(RoleKind kind) =>
         Servants.Concat(Gentry).First(r => r.Kind == kind);
+
+    public static RoleDef Visitor(RoleKind kind) => Visitors.First(r => r.Kind == kind);
 
     /// <summary>Human-readable motive name for menus.</summary>
     public static string MotiveName(MotiveKind motive) => motive switch
@@ -109,6 +136,14 @@ public static class RoleCatalog
         MotiveKind.Blackmail => "Being blackmailed",
         MotiveKind.Revenge => "Revenge for an old wrong",
         MotiveKind.Disinheritance => "About to be disinherited",
+        MotiveKind.Affair => "An affair",
+        MotiveKind.Silence => "To keep a secret buried",
+        MotiveKind.Recognition => "A secret parentage",
+        MotiveKind.Negligence => "Hiding a fatal blunder",
+        MotiveKind.Imposture => "Exposure as an impostor",
+        MotiveKind.Insurance => "A life insurance policy",
+        MotiveKind.Theft => "Caught stealing",
+        MotiveKind.Accident => "None: it was an accident",
         _ => "No motive",
     };
 }

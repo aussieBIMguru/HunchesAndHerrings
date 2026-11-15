@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using HunchesAndHerrings.Audio;
+using HunchesAndHerrings.Core.Game;
 using HunchesAndHerrings.Rendering;
 using Rectangle = System.Windows.Shapes.Rectangle;
 using ShapePath = System.Windows.Shapes.Path;
@@ -27,7 +28,8 @@ internal sealed record JournalEntry(
     IReadOnlyList<string> Badges,
     bool Circled,
     string? ActionLabel,
-    bool ActionEnabled);
+    bool ActionEnabled,
+    IReadOnlyList<WordSpan>? Highlights = null);
 
 /// <summary>Text for the journal's first page.</summary>
 internal sealed record JournalTitle(string Title, string Subtitle, string Footer);
@@ -87,6 +89,9 @@ internal sealed class JournalView : Grid
     private bool _turning;
     private bool _hooked;
     private TimeSpan _last;
+    private (int Entry, int Word)? _dragStart;
+    private bool _eraser;
+    private readonly StackPanel _tools = new() { Orientation = Orientation.Horizontal };
 
     public JournalView(Action<Sfx, double> playSound)
     {
@@ -119,6 +124,11 @@ internal sealed class JournalView : Grid
 
     /// <summary>Raised when an entry's action link is clicked.</summary>
     public event Action<string>? ActionInvoked;
+
+    /// <summary>
+    /// Raised when words in an entry are ringed or rubbed out: entry key, first and last word index, and true to erase.
+    /// </summary>
+    public event Action<string, int, int, bool>? HighlightRequested;
 
     public bool IsAnimating => _current is not null || _queue.Count > 0 || _turning;
 
@@ -225,9 +235,12 @@ internal sealed class JournalView : Grid
                 TitleWidth = Measure(entry.Title, Ui.Hand, 19, FontWeights.Bold, FontStyles.Normal, dip),
                 SourceWidth = Measure(entry.Source, Ui.Body, 11.5, FontWeights.Normal, FontStyles.Italic, dip),
             };
+            int word = 0;
             foreach (string text in Wrap(entry.Body, Ui.Hand, 16, TextWidth, dip))
             {
                 layout.Body.Add((text, Measure(text, Ui.Hand, 16, FontWeights.Normal, FontStyles.Normal, dip)));
+                layout.FirstWord.Add(word);
+                word += text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
             }
 
             layout.HasActionRow = entry.ActionLabel is not null || entry.Badges.Count > 0;
@@ -248,8 +261,8 @@ internal sealed class JournalView : Grid
 
     private bool MatchesFilter(JournalEntry e) => _filter switch
     {
-        "All" => true,
-        "Circled" => e.Circled,
+        "All" => e.Category != "Points",
+        "Circled" => e.Circled || (e.Highlights?.Count ?? 0) > 0,
         _ => e.Category == _filter,
     };
 
@@ -369,7 +382,7 @@ internal sealed class JournalView : Grid
         panel.Children.Add(new TextBlock { Text = _title.Footer, FontFamily = Ui.Body, FontSize = 13, FontStyle = FontStyles.Italic, Foreground = Ui.InkFaded, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 40, 0, 0) });
         panel.Children.Add(new TextBlock
         {
-            Text = "Click an entry's title to circle it.\nCircled entries are gathered under the \"Circled\" tab.",
+            Text = "Click an entry's title to circle it, or click a word (or drag across words) to ring just that. Rings that touch join up.\nRight-click, or pick the eraser, to rub rings out. Everything circled is gathered under the \"Circled\" tab.",
             FontFamily = Ui.Hand, FontSize = 14, Foreground = Ui.InkFaded, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 60, 0, 0),
         });
         Place(page, panel, 50, 120);
@@ -403,11 +416,81 @@ internal sealed class JournalView : Grid
         var source = new TextBlock { Text = e.Source, FontFamily = Ui.Body, FontSize = 11.5, FontStyle = FontStyles.Italic, Foreground = Ui.InkFaded };
         AddStroke(page, index, 1, source, MarginX, Rule(1) - 17, l.SourceWidth, pageX, Rule(1) - 3, pending);
 
-        // Body
+        // Body: click a word, or drag across words (even onto the next line), to ring them.
+        // With the eraser, or with a right-click, the same gestures rub rings out.
+        double dip = PixelsPerDip();
         for (int k = 0; k < l.Body.Count; k++)
         {
-            var line = new TextBlock { Text = l.Body[k].Text, FontFamily = Ui.Hand, FontSize = 16, Foreground = e.Ink };
+            string text = l.Body[k].Text;
+            string[] words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            int firstWord = l.FirstWord[k];
+            var line = new TextBlock
+            {
+                Text = text,
+                FontFamily = Ui.Hand,
+                FontSize = 16,
+                Foreground = e.Ink,
+                Background = Brushes.Transparent,
+                Cursor = _eraser ? Cursors.Cross : Cursors.IBeam,
+                ToolTip = _eraser ? "Click or drag to rub out rings" : "Click a word, or drag across words, to ring them. Right-click to rub out.",
+            };
+            int WordUnder(MouseEventArgs args) => firstWord + WordAt(text, args.GetPosition(line).X, dip);
+            line.MouseLeftButtonDown += (_, args) =>
+            {
+                if (!IsAnimating)
+                {
+                    _dragStart = (index, WordUnder(args));
+                    args.Handled = true;
+                }
+            };
+            line.MouseLeftButtonUp += (_, args) =>
+            {
+                if (IsAnimating || _dragStart is not { } start || start.Entry != index)
+                {
+                    _dragStart = null;
+                    return;
+                }
+
+                _dragStart = null;
+                HighlightRequested?.Invoke(e.Key, start.Word, WordUnder(args), _eraser);
+                args.Handled = true;
+            };
+            line.MouseRightButtonUp += (_, args) =>
+            {
+                if (!IsAnimating)
+                {
+                    int w = WordUnder(args);
+                    HighlightRequested?.Invoke(e.Key, w, w, true);
+                    args.Handled = true;
+                }
+            };
             AddStroke(page, index, 2 + k, line, MarginX, Rule(2 + k) - 22, l.Body[k].Width, pageX, Rule(2 + k) - 4, pending);
+
+            // Red rings round the highlighted part of this line.
+            int lastWord = firstWord + words.Length - 1;
+            foreach (WordSpan span in e.Highlights ?? Array.Empty<WordSpan>())
+            {
+                int from = Math.Max(span.First, firstWord);
+                int to = Math.Min(span.Last, lastWord);
+                if (from > to)
+                {
+                    continue;
+                }
+
+                string before = string.Join(' ', words.Take(from - firstWord));
+                string ringed = string.Join(' ', words[(from - firstWord)..(to - firstWord + 1)]);
+                double x = before.Length == 0 ? 0 : Measure(before + " ", Ui.Hand, 16, FontWeights.Normal, FontStyles.Normal, dip);
+                double w = Measure(ringed, Ui.Hand, 16, FontWeights.Normal, FontStyles.Normal, dip);
+                var loop = new ShapePath
+                {
+                    Data = InkLoop(new Rect(MarginX + x - 5, Rule(2 + k) - 25, w + 10, 26), new Random(HashCode.Combine(e.Key, span.First, k))),
+                    Stroke = CircleInk,
+                    StrokeThickness = 1.8,
+                    IsHitTestVisible = false,
+                };
+                page.Children.Add(loop);
+                extras.Add(loop);
+            }
         }
 
         // Badges and action link
@@ -487,6 +570,23 @@ internal sealed class JournalView : Grid
         _strokes[(entry, strokeIndex)] = new Stroke(block, clip, new Point(pageX + x, PageTop + baseline), Math.Max(4, width));
     }
 
+    /// <summary>The index (within the line) of the word under a horizontal offset into a line of journal text.</summary>
+    private static int WordAt(string text, double x, double dip)
+    {
+        int ch = Math.Max(0, text.Length - 1);
+        for (int i = 1; i <= text.Length; i++)
+        {
+            if (Measure(text[..i], Ui.Hand, 16, FontWeights.Normal, FontStyles.Normal, dip) > x)
+            {
+                ch = i - 1;
+                break;
+            }
+        }
+
+        // Count the gaps before the character; a click on a space belongs to the word after it.
+        return text[..ch].Count(c => c == ' ');
+    }
+
     /// <summary>A loose hand-drawn loop around a rectangle, overshooting where the pen started.</summary>
     private static Geometry InkLoop(Rect r, Random rng)
     {
@@ -547,7 +647,9 @@ internal sealed class JournalView : Grid
         // Ribbon bookmark
         Place(_book, new ShapePath { Data = Geometry.Parse("M 0,0 L 18,0 L 18,120 L 9,108 L 0,120 Z"), Fill = Frozen(Color.FromRgb(0x8B, 0x1E, 0x1E)), IsHitTestVisible = false, Opacity = 0.9 }, 1040, PageTop - 6);
 
-        // Filter tabs and close
+        // Pen or eraser, filter tabs and close
+        Place(_book, _tools, LeftPageX + 10, 6);
+        RefreshTools();
         Place(_book, _tabs, RightPageX + 10, 6);
         var close = Tab("✕ close", true, () =>
         {
@@ -571,6 +673,26 @@ internal sealed class JournalView : Grid
         };
 
         Place(_book, _pen, 0, 0);
+    }
+
+    private void RefreshTools()
+    {
+        _tools.Children.Clear();
+        _tools.Children.Add(Tab("◯ ring", !_eraser, () => SetEraser(false)));
+        _tools.Children.Add(Tab("⌫ eraser", _eraser, () => SetEraser(true)));
+    }
+
+    private void SetEraser(bool on)
+    {
+        if (_eraser == on || IsAnimating)
+        {
+            return;
+        }
+
+        _eraser = on;
+        _playSound(Sfx.Quill, 0.25);
+        RefreshTools();
+        Render();
     }
 
     private void RefreshTabs()
@@ -879,6 +1001,9 @@ internal sealed class JournalView : Grid
         public double TitleWidth { get; set; }
         public double SourceWidth { get; set; }
         public List<(string Text, double Width)> Body { get; } = new();
+
+        /// <summary>Index (into the entry's words) of the first word on each body line.</summary>
+        public List<int> FirstWord { get; } = new();
         public bool HasActionRow { get; set; }
         public int LineCount => 2 + Body.Count + (HasActionRow ? 1 : 0) + 1;
     }

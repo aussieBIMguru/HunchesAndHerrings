@@ -10,7 +10,7 @@ namespace HunchesAndHerrings.Core.Game;
 /// </summary>
 public sealed class SaveData
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     public int Version { get; set; } = CurrentVersion;
     public int Seed { get; set; }
@@ -39,6 +39,11 @@ public sealed class SaveData
     public string Notes { get; set; } = string.Empty;
     public Dictionary<string, Sighting> LastSeen { get; set; } = new();
     public List<LogEntry> Log { get; set; } = new();
+    public List<Summons> Summons { get; set; } = new();
+    public int RivalTipsGiven { get; set; }
+    public List<string> RivalReturned { get; set; } = new();
+    public int RivalPleas { get; set; }
+    public Dictionary<string, List<WordSpan>> Highlights { get; set; } = new();
 }
 
 /// <summary>Reads and writes <see cref="SaveData"/> as JSON without throwing at the caller.</summary>
@@ -67,6 +72,12 @@ public static class SaveSerializer
             if (data.Version > SaveData.CurrentVersion)
             {
                 error = "This case file was saved by a newer version of the game.";
+                return null;
+            }
+
+            if (data.Version < SaveData.CurrentVersion)
+            {
+                error = "This case file was saved by an earlier version of the game, which built its mysteries differently. Start it afresh from its case number instead.";
                 return null;
             }
 
